@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from pydantic import field_validator
@@ -26,9 +27,18 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
-        # Render gives "postgres://..." but SQLAlchemy 2 requires "postgresql://..."
-        if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql://", 1)
+        v = v.strip().strip('"').strip("'")
+
+        # postgres://, postgresql://, postgresql+psycopg://, postgresql+asyncpg://
+        # -> postgresql+psycopg2:// (the driver listed in requirements.txt)
+        v = re.sub(r"^(postgres|postgresql)(\+\w+)?://", "postgresql+psycopg2://", v)
+
+        if v.startswith("postgresql+psycopg2://"):
+            # psycopg2 / libpq does not understand channel_binding on some builds
+            v = re.sub(r"([?&])channel_binding=[^&]*&?", r"\1", v).rstrip("?&")
+            # Neon requires SSL
+            if "sslmode=" not in v:
+                v += ("&" if "?" in v else "?") + "sslmode=require"
         return v
 
     @property
