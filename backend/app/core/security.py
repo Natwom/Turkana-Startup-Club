@@ -1,19 +1,28 @@
 from datetime import datetime, timedelta, timezone
+
+import bcrypt
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from app.core.config import settings
 
 ALGORITHM = "HS256"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _to_bytes(password: str) -> bytes:
+    # bcrypt only uses the first 72 bytes; newer versions raise an error
+    # instead of truncating, so we truncate explicitly.
+    return password.encode("utf-8")[:72]
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_to_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_to_bytes(plain), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def create_token(subject: str, token_type: str, expires: timedelta, extra: dict | None = None) -> str:
