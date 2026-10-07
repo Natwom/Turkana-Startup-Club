@@ -87,6 +87,19 @@ const errorMessage = (err) => {
   return 'Something went wrong. Please try again.'
 }
 
+// The API may return a plain list or an object like { items: [...] }.
+// Always hand the UI an array so .filter() / .slice() / .map() never throw.
+const asArray = (d) => (Array.isArray(d) ? d : Array.isArray(d?.items) ? d.items : [])
+
+// Always hand the UI a number for counters.
+const toCount = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+// Always hand the UI text where text is expected.
+const toText = (v) => (v === null || v === undefined ? '' : typeof v === 'object' ? '' : String(v))
+
 const greeting = () => {
   const h = new Date().getHours()
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
@@ -205,10 +218,11 @@ function Ring({ pct }) {
 }
 
 function StatusChip({ status }) {
-  const good = ['registered', 'confirmed', 'approved'].includes(status)
-  const wait = ['waitlisted', 'pending'].includes(status)
+  const s = toText(status)
+  const good = ['registered', 'confirmed', 'approved'].includes(s)
+  const wait = ['waitlisted', 'pending'].includes(s)
   const cls = good ? 'bg-emerald-50 text-emerald-700' : wait ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'
-  return <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full capitalize ${cls}`}>{status || 'registered'}</span>
+  return <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full capitalize ${cls}`}>{s || 'registered'}</span>
 }
 
 /* ------------------------------------------------------------------ page */
@@ -239,14 +253,17 @@ export default function Dashboard() {
       api.get('/me/notifications'),
       api.get('/members'),
     ])
-    // one failing section must not blank the whole dashboard
-    if (ev.status === 'fulfilled') setEvents(Array.isArray(ev.value.data) ? ev.value.data : [])
-    if (cn.status === 'fulfilled') setConnections(cn.value.data || [])
-    if (rq.status === 'fulfilled') setRequests(rq.value.data || [])
-    if (un.status === 'fulfilled') setUnreadMessages(un.value.data?.unread || 0)
-    if (cv.status === 'fulfilled') setConversations(cv.value.data || [])
-    if (nt.status === 'fulfilled') setNotifs({ unread: nt.value.data?.unread || 0, items: nt.value.data?.items || [] })
-    if (mb.status === 'fulfilled') setMembers(mb.value.data || [])
+    // one failing section must not blank the whole dashboard,
+    // and an unexpected response shape must not crash the render
+    if (ev.status === 'fulfilled') setEvents(asArray(ev.value.data))
+    if (cn.status === 'fulfilled') setConnections(asArray(cn.value.data))
+    if (rq.status === 'fulfilled') setRequests(asArray(rq.value.data))
+    if (un.status === 'fulfilled') setUnreadMessages(toCount(un.value.data?.unread))
+    if (cv.status === 'fulfilled') setConversations(asArray(cv.value.data))
+    if (nt.status === 'fulfilled') {
+      setNotifs({ unread: toCount(nt.value.data?.unread), items: asArray(nt.value.data?.items) })
+    }
+    if (mb.status === 'fulfilled') setMembers(asArray(mb.value.data))
     setLoading(false)
   }, [])
 
@@ -268,7 +285,7 @@ export default function Dashboard() {
     today.setHours(0, 0, 0, 0)
     return events
       .filter((e) => {
-        if (!e.event || ['attended', 'cancelled'].includes(e.status)) return false
+        if (!e || !e.event || ['attended', 'cancelled'].includes(e.status)) return false
         const t = new Date(e.event.starts_at)
         return isNaN(t) || t >= today
       })
@@ -276,10 +293,13 @@ export default function Dashboard() {
   }, [events])
 
   const suggestions = useMemo(() => {
-    const mine = (profile.skills || []).map((s) => String(s).toLowerCase())
+    const mine = (Array.isArray(profile.skills) ? profile.skills : []).map((s) => String(s).toLowerCase())
     return members
-      .filter((m) => m.connection_status === 'none' || sentIds.has(m.id))
-      .map((m) => ({ ...m, shared: (m.skills || []).filter((s) => mine.includes(s)).length }))
+      .filter((m) => m && (m.connection_status === 'none' || sentIds.has(m.id)))
+      .map((m) => ({
+        ...m,
+        shared: (Array.isArray(m.skills) ? m.skills : []).filter((s) => mine.includes(String(s).toLowerCase())).length,
+      }))
       .sort((a, b) => b.shared - a.shared)
       .slice(0, 4)
   }, [members, profile.skills, sentIds])
@@ -348,7 +368,7 @@ export default function Dashboard() {
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {(profile.professional_role || profile.member_type) && (
                   <span className="text-xs bg-white/15 rounded-full px-3 py-1">
-                    {profile.professional_role || profile.member_type}
+                    {toText(profile.professional_role || profile.member_type)}
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1.5 text-xs bg-white/15 rounded-full px-3 py-1">
@@ -418,14 +438,14 @@ export default function Dashboard() {
                         <span className="text-xl font-bold leading-none">{valid ? d.getDate() : ''}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate">{e.event.title}</p>
+                        <p className="font-medium text-gray-900 truncate">{toText(e.event.title)}</p>
                         <p className="text-sm text-gray-500 truncate flex items-center gap-1">
                           {valid ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                           {e.event.venue && (
                             <>
                               <span aria-hidden="true">·</span>
                               <Icon name="pin" className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{e.event.venue}</span>
+                              <span className="truncate">{toText(e.event.venue)}</span>
                             </>
                           )}
                         </p>
@@ -445,8 +465,8 @@ export default function Dashboard() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {upcoming.slice(0, 4).map((e) => (
                   <div key={e.id} className="border border-dashed border-emerald-300 bg-emerald-50/40 rounded-xl p-4">
-                    <p className="text-sm font-medium text-gray-900 truncate">{e.event.title}</p>
-                    <p className="mt-1 font-mono text-sm text-emerald-800 break-all">{e.registration_id}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{toText(e.event.title)}</p>
+                    <p className="mt-1 font-mono text-sm text-emerald-800 break-all">{toText(e.registration_id)}</p>
                     <div className="mt-3 flex items-center justify-between">
                       <StatusChip status={e.status} />
                       <button onClick={() => copyTicket(e)}
@@ -470,10 +490,10 @@ export default function Dashboard() {
                   const sent = sentIds.has(m.id) || m.connection_status === 'pending_sent'
                   return (
                     <li key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                      <Avatar name={m.full_name} url={m.photo_url} size="w-11 h-11" />
+                      <Avatar name={toText(m.full_name)} url={toText(m.photo_url)} size="w-11 h-11" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate">{m.full_name}</p>
-                        <p className="text-sm text-gray-500 truncate">{m.role || m.member_type}</p>
+                        <p className="font-medium text-gray-900 truncate">{toText(m.full_name)}</p>
+                        <p className="text-sm text-gray-500 truncate">{toText(m.role || m.member_type)}</p>
                         {m.shared > 0 && (
                           <p className="text-xs text-emerald-700 mt-0.5">
                             {m.shared} shared skill{m.shared > 1 ? 's' : ''}
@@ -530,11 +550,11 @@ export default function Dashboard() {
             ) : (
               <ul className="space-y-3">
                 {requests.slice(0, 3).map((r) => (
-                  <li key={r.connection_id} className="flex items-center gap-3">
-                    <Avatar name={r.full_name} size="w-10 h-10" />
+                  <li key={r.connection_id ?? r.user_id} className="flex items-center gap-3">
+                    <Avatar name={toText(r.full_name)} size="w-10 h-10" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{r.full_name}</p>
-                      <p className="text-xs text-gray-500 truncate">{r.role}</p>
+                      <p className="text-sm font-medium truncate">{toText(r.full_name)}</p>
+                      <p className="text-xs text-gray-500 truncate">{toText(r.role)}</p>
                     </div>
                     <div className="flex gap-1.5">
                       <button disabled={busyId === r.user_id} onClick={() => respond(r.user_id, 'accept')}
@@ -562,16 +582,16 @@ export default function Dashboard() {
                   <li key={c.user_id}>
                     <Link to={`/messages/${c.user_id}`}
                       className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-gray-50">
-                      <Avatar name={c.full_name} size="w-10 h-10" />
+                      <Avatar name={toText(c.full_name)} size="w-10 h-10" />
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm truncate ${c.unread ? 'font-bold' : 'font-medium'}`}>{c.full_name}</p>
+                        <p className={`text-sm truncate ${c.unread ? 'font-bold' : 'font-medium'}`}>{toText(c.full_name)}</p>
                         <p className="text-xs text-gray-500 truncate">
-                          {c.last_message ? `${c.last_from_me ? 'You: ' : ''}${c.last_message}` : 'Say hello'}
+                          {c.last_message ? `${c.last_from_me ? 'You: ' : ''}${toText(c.last_message)}` : 'Say hello'}
                         </p>
                       </div>
-                      {c.unread > 0 && (
+                      {toCount(c.unread) > 0 && (
                         <span className="bg-emerald-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center">
-                          {c.unread}
+                          {toCount(c.unread)}
                         </span>
                       )}
                     </Link>
@@ -595,7 +615,7 @@ export default function Dashboard() {
                       className="w-full text-left flex items-start gap-3 p-2 -mx-2 rounded-lg hover:bg-gray-50">
                       <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${n.is_read ? 'bg-gray-300' : 'bg-emerald-500'}`} />
                       <span className="min-w-0 flex-1">
-                        <span className={`block text-sm truncate ${n.is_read ? 'text-gray-600' : 'font-semibold text-gray-900'}`}>{n.title}</span>
+                        <span className={`block text-sm truncate ${n.is_read ? 'text-gray-600' : 'font-semibold text-gray-900'}`}>{toText(n.title)}</span>
                         <span className="block text-[11px] text-gray-400">{timeAgo(n.created_at)}</span>
                       </span>
                     </button>
