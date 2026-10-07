@@ -10,4 +10,5 @@ passlib[bcrypt]
 python-multipart
 email-validator
 qrcode[pil]
-python-dotenvpython-multipart
+python-dotenv
+python-multipart
