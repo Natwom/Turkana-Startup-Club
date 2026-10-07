@@ -2,42 +2,83 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+/* ── Inline SVG icon set (no extra dependency needed) ── */
+const ICON_PATHS = {
+  code: 'M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5',
+  users:
+    'M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z',
+  book:
+    'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
+  trend:
+    'M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941',
+  globe:
+    'M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418',
+  calendar:
+    'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
+  search:
+    'm21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
+  cap:
+    'M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5',
+  chat:
+    'M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155',
+  bell:
+    'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0',
+  bulb:
+    'M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18',
+}
+
+function Icon({ name, className = 'w-6 h-6' }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS[name]} />
+    </svg>
+  )
+}
+
 const pillars = [
-  ['BUILD', 'Hackathons, build sessions, project teams, demo days.', '💻'],
-  ['CONNECT', 'Member directory, founder meetups, mentor matching.', '🤝'],
-  ['LEARN', 'Workshops, tech talks, AI, cybersecurity, pitching.', '📚'],
-  ['GROW', 'Mentorship, incubation, grants, accelerators.', '📈'],
-  ['COMMUNITY', 'Chapters, volunteers, annual conference, recognition.', '🌍'],
+  ['BUILD', 'Hackathons, build sessions, project teams, demo days.', 'code'],
+  ['CONNECT', 'Member directory, founder meetups, mentor matching.', 'users'],
+  ['LEARN', 'Workshops, tech talks, AI, cybersecurity, pitching.', 'book'],
+  ['GROW', 'Mentorship, incubation, grants, accelerators.', 'trend'],
+  ['COMMUNITY', 'Chapters, volunteers, annual conference, recognition.', 'globe'],
 ]
 
 const features = [
   {
-    icon: '🗓️',
+    icon: 'calendar',
     title: 'Events & Hackathons',
     desc: 'Discover, RSVP to and get reminders for every event, workshop and hackathon in the ecosystem.',
   },
   {
-    icon: '🧭',
+    icon: 'search',
     title: 'Startup Directory',
     desc: 'A public directory of startups and founders. Find co-founders, collaborators and partners.',
   },
   {
-    icon: '🎓',
+    icon: 'cap',
     title: 'Digital Certificates',
     desc: 'Earn verifiable certificates for participating in events, hackathons and programs.',
   },
   {
-    icon: '💬',
+    icon: 'chat',
     title: 'Messaging & Networking',
     desc: 'Connect with members directly, message founders, mentors and volunteers in real time.',
   },
   {
-    icon: '🔔',
+    icon: 'bell',
     title: 'Smart Notifications',
     desc: 'Stay in the loop with instant alerts for event invites, mentorship matches and mentions.',
   },
   {
-    icon: '🚀',
+    icon: 'bulb',
     title: 'Incubation & Grants',
     desc: 'Apply to incubation programs, pitch competitions and grant opportunities from one place.',
   },
@@ -81,11 +122,12 @@ const stats = [
   ['120+', 'Mentors'],
 ]
 
+// [name, url, short label shown in the button]
 const socials = [
-  ['X / Twitter', 'https://twitter.com', '𝕏'],
-  ['Instagram', 'https://instagram.com', '📷'],
-  ['LinkedIn', 'https://linkedin.com', '💼'],
-  ['YouTube', 'https://youtube.com', '▶️'],
+  ['X / Twitter', 'https://twitter.com', 'X'],
+  ['Instagram', 'https://instagram.com', 'IG'],
+  ['LinkedIn', 'https://linkedin.com', 'in'],
+  ['YouTube', 'https://youtube.com', 'YT'],
 ]
 
 function CountUp({ target, duration = 1500 }) {
@@ -156,8 +198,9 @@ export default function Landing() {
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
         <div className="relative max-w-4xl mx-auto px-4 py-24 md:py-32 text-center">
-          <span className="inline-block px-3 py-1 mb-6 text-xs font-semibold tracking-wide bg-white/10 border border-white/20 rounded-full">
-            🚀 Empowering Turkana's builders, founders & dreamers
+          <span className="inline-flex items-center gap-2 px-3 py-1 mb-6 text-xs font-semibold tracking-wide bg-white/10 border border-white/20 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-emerald-300" />
+            Empowering Turkana's builders, founders & dreamers
           </span>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
             The digital home of Turkana's<br className="hidden md:block" /> startup ecosystem
@@ -200,7 +243,9 @@ export default function Landing() {
           {pillars.map(([name, desc, icon], i) => (
             <div key={name}
               className="group border rounded-2xl p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-200 bg-gradient-to-b from-white to-gray-50">
-              <span className="text-3xl">{icon}</span>
+              <span className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Icon name={icon} className="w-6 h-6" />
+              </span>
               <h3 className="mt-4 font-bold text-emerald-700">{String(i + 1).padStart(2, '0')} · {name}</h3>
               <p className="mt-2 text-sm text-gray-600">{desc}</p>
             </div>
@@ -218,7 +263,9 @@ export default function Landing() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f) => (
               <div key={f.title} className="bg-white rounded-2xl p-6 border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-                <span className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-2xl">{f.icon}</span>
+                <span className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Icon name={f.icon} className="w-6 h-6" />
+                </span>
                 <h3 className="mt-4 font-bold text-lg">{f.title}</h3>
                 <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
               </div>
@@ -314,10 +361,10 @@ export default function Landing() {
           <div>
             <h4 className="text-white font-semibold mb-3">Follow Us</h4>
             <div className="flex gap-3">
-              {socials.map(([name, url, icon]) => (
-                <a key={name} href={url} target="_blank" rel="noreferrer" title={name}
-                  className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-emerald-600 transition">
-                  {icon}
+              {socials.map(([name, url, label]) => (
+                <a key={name} href={url} target="_blank" rel="noreferrer" title={name} aria-label={name}
+                  className="w-9 h-9 rounded-lg bg-gray-800 text-sm font-semibold text-gray-300 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition">
+                  {label}
                 </a>
               ))}
             </div>
