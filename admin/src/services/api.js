@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+// Development: '/api' (Vite proxies it to the local backend on port 8001).
+// Production: VITE_API_URL is set in .env.production.
+const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+
+const api = axios.create({ baseURL: API_URL })
 
 // Attach token to every request
 api.interceptors.request.use((config) => {

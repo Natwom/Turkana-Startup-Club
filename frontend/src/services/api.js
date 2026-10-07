@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+// Development: '/api' (Vite proxies it to the local backend on port 8001).
+// Production: VITE_API_URL is set in .env.production.
+const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+
+const api = axios.create({ baseURL: API_URL })
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('tsc_access_token')
@@ -17,7 +21,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && original && !original._retried && !isAuthCall) {
       original._retried = true
       try {
-        const { data } = await axios.post('/api/auth/refresh', {
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
           refresh_token: localStorage.getItem('tsc_refresh_token'),
         })
         localStorage.setItem('tsc_access_token', data.access_token)

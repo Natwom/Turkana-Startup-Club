@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/ directory (config.py lives in backend/app/core/)
@@ -22,9 +23,18 @@ class Settings(BaseSettings):
     SUPER_ADMIN_PASSWORD: str = "ChangeMe123!"
     FRONTEND_URL: str = "http://localhost:5173"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        # Render gives "postgres://..." but SQLAlchemy 2 requires "postgresql://..."
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v
+
     @property
     def cors_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        # strip spaces and trailing slashes so "https://site.com/" still matches
+        return [o.strip().rstrip("/") for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
 
 settings = Settings()
