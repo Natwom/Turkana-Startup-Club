@@ -40,8 +40,11 @@ export default function Messages() {
   const [sending, setSending] = useState(false)
   const [query, setQuery] = useState('')
   const [loadingThread, setLoadingThread] = useState(false)
-  const bottomRef = useRef(null)
-  const areaRef = useRef(null)
+
+  const scrollRef = useRef(null)   // the scrollable message list
+  const areaRef = useRef(null)     // the textarea
+  const stickToBottom = useRef(true)
+  const firstLoad = useRef(true)
 
   const loadConversations = useCallback(async () => {
     try {
@@ -54,15 +57,26 @@ export default function Messages() {
 
   const loadThread = useCallback(async () => {
     if (!userId) return
-    setLoadingThread(true)
+    // Only show the skeleton the first time a conversation opens,
+    // not on every background refresh (that caused the up/down jumping).
+    if (firstLoad.current) setLoadingThread(true)
     try {
       const r = await api.get(`/messages/${userId}`)
-      setThread(r.data)
+      setThread((prev) => {
+        const prevLast = prev.messages[prev.messages.length - 1]?.id
+        const nextLast = r.data.messages?.[r.data.messages.length - 1]?.id
+        const same =
+          prev.user?.full_name === r.data.user?.full_name &&
+          prev.messages.length === (r.data.messages?.length || 0) &&
+          prevLast === nextLast
+        return same ? prev : r.data
+      })
       setError('')
       loadConversations() // unread counts changed because the thread was opened
     } catch (err) {
       setError(errorMessage(err))
     } finally {
+      firstLoad.current = false
       setLoadingThread(false)
     }
   }, [userId, loadConversations])
@@ -76,19 +90,23 @@ export default function Messages() {
   useEffect(() => {
     setThread({ user: null, messages: [] })
     setError('')
+    firstLoad.current = true
+    stickToBottom.current = true
     loadThread()
     const t = setInterval(loadThread, 5000)
     return () => clearInterval(t)
   }, [loadThread])
 
-  // Auto-scroll only when near the bottom or when message count grows
-  const stickToBottom = useRef(true)
+  // Scroll ONLY the message list (never the whole page) when new messages arrive
   useEffect(() => {
-    if (stickToBottom.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollRef.current
+    if (el && stickToBottom.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }
   }, [thread.messages.length])
 
   const onScroll = () => {
-    const el = areaRef.current
+    const el = scrollRef.current
     if (!el) return
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
   }
@@ -227,7 +245,8 @@ export default function Messages() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/60" onScroll={onScroll}>
+              <div ref={scrollRef} onScroll={onScroll}
+                className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/60">
                 {loadingThread && (
                   <div className="space-y-3 animate-pulse pt-2">
                     <div className="h-8 w-1/2 bg-gray-100 rounded-2xl" />
@@ -268,7 +287,6 @@ export default function Messages() {
                     </div>
                   </div>
                 ))}
-                <div ref={bottomRef} />
               </div>
 
               {error && (
@@ -284,7 +302,7 @@ export default function Messages() {
                     onKeyDown={onKeyDown}
                     rows={1}
                     maxLength={2000}
-                    placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
+                    placeholder="Type a message…"
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-[120px]"
                   />
                   <button type="submit" disabled={sending || !text.trim()}
@@ -292,8 +310,7 @@ export default function Messages() {
                     {sending ? '…' : 'Send ➤'}
                   </button>
                 </div>
-                <div className="flex justify-between mt-1 px-1">
-                  <span className="text-[10px] text-gray-400">Shift+Enter for a new line</span>
+                <div className="flex justify-end mt-1 px-1">
                   <span className={`text-[10px] ${text.length > 1800 ? 'text-red-500' : 'text-gray-400'}`}>
                     {text.length}/2000
                   </span>
