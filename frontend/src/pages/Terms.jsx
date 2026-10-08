@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom'
 
 const LAST_UPDATED = '7 October 2026'
 const CONTACT_EMAIL = '[contact email]'          // TODO: fill in
-const ORG_ADDRESS = '[registered address, Turkana County, Kenya]' // TODO: fill in
 
 function H({ id, children }) {
   return <h2 id={id} className="text-lg font-semibold mt-8 mb-2 scroll-mt-6">{children}</h2>
@@ -117,8 +116,7 @@ export default function Terms() {
 
         <H>13. Contact</H>
         <p>
-          Questions about these terms or your data: natwomdaniel@gmail.com<br />
-        
+          Questions about these terms or your data: natwomdaniel@gmail.com
         </p>
       </article>
     </div>
