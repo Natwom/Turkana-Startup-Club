@@ -118,7 +118,7 @@ export default function Terms() {
         <H>13. Contact</H>
         <p>
           Questions about these terms or your data: natwomdaniel@gmail.com<br />
-          {ORG_ADDRESS}
+        
         </p>
       </article>
     </div>
