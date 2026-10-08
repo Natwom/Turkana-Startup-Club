@@ -43,6 +43,47 @@ function Icon({ name, className = 'w-6 h-6' }) {
   )
 }
 
+/* ── Social brand logos (inline SVG, 24x24 viewBox) ── */
+function SocialIcon({ name, className = 'w-5 h-5' }) {
+  const common = {
+    xmlns: 'http://www.w3.org/2000/svg',
+    viewBox: '0 0 24 24',
+    className,
+    'aria-hidden': 'true',
+  }
+
+  switch (name) {
+    case 'x':
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" />
+        </svg>
+      )
+    case 'instagram':
+      return (
+        <svg {...common} fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'linkedin':
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+        </svg>
+      )
+    case 'youtube':
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 const pillars = [
   ['BUILD', 'Hackathons, build sessions, project teams, demo days.', 'code'],
   ['CONNECT', 'Member directory, founder meetups, mentor matching.', 'users'],
@@ -115,36 +156,22 @@ const faqs = [
   ['How do I get mentorship or funding?', 'Complete your profile, list your startup and apply to incubation programs. Our team will review and match you with mentors and opportunities.'],
 ]
 
-const stats = [
-  ['1,200+', 'Members'],
-  ['85+', 'Events Hosted'],
-  ['40+', 'Startups Supported'],
-  ['120+', 'Mentors'],
+// Highlights shown under the hero: [headline, supporting text, icon]
+const highlights = [
+  ['Free to join', 'No fees, no catch', 'users'],
+  ['Open to everyone', 'Students to founders', 'cap'],
+  ['Build, learn, connect', 'Events, mentors, projects', 'bulb'],
+  ['Made in Turkana', 'For the county and beyond', 'globe'],
 ]
 
-// [name, url, short label shown in the button]
+// [name, url, icon key]
+// Replace these URLs with the club's real social media pages.
 const socials = [
-  ['X / Twitter', 'https://twitter.com', 'X'],
-  ['Instagram', 'https://instagram.com', 'IG'],
-  ['LinkedIn', 'https://linkedin.com', 'in'],
-  ['YouTube', 'https://youtube.com', 'YT'],
+  ['X (Twitter)', 'https://x.com', 'x'],
+  ['Instagram', 'https://instagram.com', 'instagram'],
+  ['LinkedIn', 'https://linkedin.com', 'linkedin'],
+  ['YouTube', 'https://youtube.com', 'youtube'],
 ]
-
-function CountUp({ target, duration = 1500 }) {
-  const [value, setValue] = useState(0)
-  useEffect(() => {
-    let raf
-    const start = performance.now()
-    const tick = (t) => {
-      const p = Math.min((t - start) / duration, 1)
-      setValue(Math.floor(p * target))
-      if (p < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target, duration])
-  return <>{value}</>
-}
 
 function FAQ({ q, a, open, onToggle }) {
   return (
@@ -218,15 +245,18 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Stats bar */}
+        {/* Highlights bar (replaces the old numeric stats) */}
         <div className="relative bg-white text-gray-800 border-t border-emerald-900/10">
-          <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {stats.map(([num, label]) => (
-              <div key={label}>
-                <p className="text-3xl font-extrabold text-emerald-700">
-                  <CountUp target={parseInt(num, 10)} />{num.includes('+') ? '+' : ''}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">{label}</p>
+          <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {highlights.map(([title, sub, icon]) => (
+              <div key={title} className="flex items-center gap-3">
+                <span className="w-10 h-10 shrink-0 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Icon name={icon} className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 leading-tight">{title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -328,7 +358,7 @@ export default function Landing() {
       <section className="max-w-4xl mx-auto px-4 pb-20">
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl text-center text-white px-6 py-16 shadow-xl">
           <h2 className="text-3xl font-bold">Ready to build the future of Turkana?</h2>
-          <p className="mt-4 text-emerald-100">Join 1,200+ members already building, learning and growing together.</p>
+          <p className="mt-4 text-emerald-100">Join the community that is building, learning and growing together.</p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
             <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg transition">
               Become a Member
@@ -356,15 +386,16 @@ export default function Landing() {
               <li><Link to="/events" className="hover:text-white">Events</Link></li>
               <li><Link to="/register" className="hover:text-white">Join TSC</Link></li>
               <li><Link to="/login" className="hover:text-white">Member Login</Link></li>
+              <li><Link to="/terms" className="hover:text-white">Terms &amp; Privacy</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white font-semibold mb-3">Follow Us</h4>
             <div className="flex gap-3">
-              {socials.map(([name, url, label]) => (
-                <a key={name} href={url} target="_blank" rel="noreferrer" title={name} aria-label={name}
-                  className="w-9 h-9 rounded-lg bg-gray-800 text-sm font-semibold text-gray-300 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition">
-                  {label}
+              {socials.map(([name, url, icon]) => (
+                <a key={name} href={url} target="_blank" rel="noreferrer noopener" title={name} aria-label={name}
+                  className="w-10 h-10 rounded-lg bg-gray-800 text-gray-300 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition">
+                  <SocialIcon name={icon} className="w-5 h-5" />
                 </a>
               ))}
             </div>
