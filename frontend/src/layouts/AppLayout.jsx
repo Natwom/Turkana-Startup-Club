@@ -11,6 +11,42 @@ const links = [
   ['Network', '/network'], ['Messages', '/messages'],
 ]
 
+/* ------------------------------------------------------------------ icons */
+const ICONS = {
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+      <path d="M1 14h6M9 8h6M17 16h6" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </>
+  ),
+  chevron: <path d="M6 9l6 6 6-6" />,
+  menu: <path d="M3 6h18M3 12h18M3 18h18" />,
+  close: <path d="M18 6L6 18M6 6l12 12" />,
+}
+
+function Icon({ name, className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      {ICONS[name]}
+    </svg>
+  )
+}
+
+/* ------------------------------------------------------------------ notification bell */
 function NotificationBell() {
   const [data, setData] = useState({ unread: 0, items: [] })
   const [open, setOpen] = useState(false)
@@ -41,11 +77,13 @@ function NotificationBell() {
   return (
     <div className="relative">
       <button onClick={() => { setOpen((v) => !v); if (!open) load() }}
-        className="relative text-xl leading-none p-2 rounded-lg hover:bg-gray-100" aria-label="Notifications">
-        🔔
+        className="relative p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+        aria-label={data.unread > 0 ? `Notifications, ${data.unread} unread` : 'Notifications'}
+        aria-expanded={open}>
+        <Icon name="bell" className="h-5 w-5" />
         {data.unread > 0 && (
-          <span className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold
-            rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center">
+          <span className="absolute top-0.5 right-0.5 bg-red-600 text-white text-[10px] font-bold
+            rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center ring-2 ring-white">
             {data.unread > 9 ? '9+' : data.unread}
           </span>
         )}
@@ -65,7 +103,12 @@ function NotificationBell() {
             </div>
             <div className="max-h-96 overflow-y-auto">
               {data.items.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">No notifications yet.</p>
+                <div className="px-4 py-8 text-center">
+                  <span className="mx-auto mb-2 h-10 w-10 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center">
+                    <Icon name="bell" className="h-5 w-5" />
+                  </span>
+                  <p className="text-sm text-gray-500">No notifications yet.</p>
+                </div>
               ) : data.items.map((n) => (
                 <button key={n.id} onClick={() => clickItem(n)}
                   className={`w-full text-left px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 ${
@@ -83,6 +126,7 @@ function NotificationBell() {
   )
 }
 
+/* ------------------------------------------------------------------ user menu */
 function UserMenu({ user, logout }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
@@ -93,10 +137,10 @@ function UserMenu({ user, logout }) {
     <div className="relative">
       <button onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-gray-100"
-        aria-label="Account menu">
+        aria-label="Account menu" aria-expanded={open}>
         <Avatar name={user?.full_name} url={user?.profile?.photo_url} />
         <span className="hidden xl:inline text-sm text-gray-700 max-w-[10rem] truncate">{user?.full_name}</span>
-        <span className="text-xs text-gray-400">▾</span>
+        <Icon name="chevron" className="h-4 w-4 text-gray-400" />
       </button>
 
       {open && (
@@ -107,11 +151,14 @@ function UserMenu({ user, logout }) {
               <p className="text-sm font-semibold truncate">{user?.full_name}</p>
               {user?.email && <p className="text-xs text-gray-500 truncate">{user.email}</p>}
             </div>
-            <NavLink to="/settings" className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-              ⚙ Settings
+            <NavLink to="/settings"
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+              <Icon name="settings" className="h-4 w-4 text-gray-500" />
+              Settings
             </NavLink>
             <button onClick={logout}
-              className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-gray-50 border-t">
+              className="flex w-full items-center gap-2.5 text-left px-4 py-2.5 text-sm text-red-600 hover:bg-gray-50 border-t">
+              <Icon name="logout" className="h-4 w-4" />
               Logout
             </button>
           </div>
@@ -121,6 +168,7 @@ function UserMenu({ user, logout }) {
   )
 }
 
+/* ------------------------------------------------------------------ layout */
 export default function AppLayout() {
   const { user, logout } = useAuth()
   const location = useLocation()
@@ -176,9 +224,9 @@ export default function AppLayout() {
             <UserMenu user={user} logout={logout} />
             {/* mobile menu button */}
             <button onClick={() => setMenuOpen((v) => !v)}
-              className="lg:hidden ml-1 px-3 py-1.5 rounded-lg text-lg hover:bg-gray-100"
-              aria-label="Menu" aria-expanded={menuOpen}>
-              {menuOpen ? '✕' : '☰'}
+              className="lg:hidden ml-1 p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}>
+              <Icon name={menuOpen ? 'close' : 'menu'} className="h-5 w-5" />
             </button>
           </div>
         </div>
