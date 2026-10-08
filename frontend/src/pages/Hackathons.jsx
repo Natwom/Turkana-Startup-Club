@@ -1,6 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
 
+/* ── Inline SVG icons (no extra dependency needed) ── */
+const ICONS = {
+  calendar: [
+    'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
+  ],
+  pin: [
+    'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+    'M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z',
+  ],
+  search: ['m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z'],
+  check: ['m4.5 12.75 6 6 9-13.5'],
+  x: ['M6 18 18 6M6 6l12 12'],
+  refresh: [
+    'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
+  ],
+  arrowRight: ['M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3'],
+  ticket: [
+    'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8Z',
+    'M14 6v2m0 3v2m0 3v2',
+  ],
+  flag: [
+    'M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5',
+  ],
+}
+
+function Icon({ name, className = 'w-4 h-4' }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.8}
+      stroke="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      {(ICONS[name] || []).map((d, i) => (
+        <path key={i} strokeLinecap="round" strokeLinejoin="round" d={d} />
+      ))}
+    </svg>
+  )
+}
+
 const BADGE = {
   upcoming: 'bg-sky-50 text-sky-700 ring-sky-200',
   live: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -162,8 +205,9 @@ export default function Hackathons() {
     if (joined.includes(h.id))
       return (
         <button disabled={busy} onClick={() => act(h.id, 'leave')}
-          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 transition-colors">
-          Joined ✓ · Leave
+          className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 transition-colors">
+          <Icon name="check" className="w-4 h-4" />
+          Joined · Leave
         </button>
       )
     if (h.status === 'upcoming' || h.status === 'live')
@@ -176,6 +220,8 @@ export default function Hackathons() {
     return <span className="text-sm text-gray-400">Registration closed</span>
   }
 
+  const emptyIcon = mineOnly ? 'ticket' : query || statusFilter !== 'all' ? 'search' : 'flag'
+
   return (
     <div className="max-w-6xl mx-auto pb-16">
       {/* Header */}
@@ -187,15 +233,22 @@ export default function Hackathons() {
             {joinedStats.live > 0 && <span className="text-emerald-600 font-medium"> · {joinedStats.live} live now</span>}
           </p>
         </div>
-        <button onClick={load} className="text-sm text-gray-500 hover:text-emerald-700 transition-colors">
-          ↻ Refresh
+        <button onClick={load}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-700 transition-colors">
+          <Icon name="refresh" className="w-4 h-4" />
+          Refresh
         </button>
       </div>
 
       {notice && (
         <div className="mb-4 flex items-center justify-between bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3">
-          <span>✓ {notice}</span>
-          <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700">✕</button>
+          <span className="inline-flex items-center gap-2">
+            <Icon name="check" className="w-4 h-4 shrink-0" />
+            {notice}
+          </span>
+          <button onClick={() => setNotice('')} aria-label="Dismiss" className="text-emerald-500 hover:text-emerald-700">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
         </div>
       )}
       {error && (
@@ -208,13 +261,17 @@ export default function Hackathons() {
       {/* Controls */}
       <div className="flex flex-wrap gap-2 mb-3">
         <div className="relative flex-1 min-w-[220px]">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">⌕</span>
+          <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 pointer-events-none">
+            <Icon name="search" className="w-4 h-4" />
+          </span>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search hackathons…"
-            className="w-full border border-gray-200 rounded-lg pl-8 pr-8 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           {query && (
-            <button onClick={() => setQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
+            <button onClick={() => setQuery('')} aria-label="Clear search"
+              className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600">
+              <Icon name="x" className="w-4 h-4" />
+            </button>
           )}
         </div>
         <button onClick={() => setMineOnly((v) => !v)}
@@ -260,7 +317,9 @@ export default function Hackathons() {
       {/* Empty state */}
       {!loading && visible.length === 0 && (
         <div className="text-center py-16">
-          <div className="text-4xl mb-3">{mineOnly ? '🎫' : query || statusFilter !== 'all' ? '🔍' : '🏁'}</div>
+          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center">
+            <Icon name={emptyIcon} className="w-7 h-7" />
+          </div>
           <p className="text-gray-500 text-sm">
             {mineOnly
               ? "You haven't joined any hackathons yet."
@@ -290,15 +349,24 @@ export default function Hackathons() {
                   {h.status}
                 </span>
                 {joined.includes(h.id) && (
-                  <span className="text-[11px] font-medium text-emerald-700">✓ Joined</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                    Joined
+                  </span>
                 )}
               </div>
 
               <h3 className="font-bold text-gray-900 mt-2 leading-snug">{h.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                📅 {fmtDate(h.starts_at)} · {fmtTime(h.starts_at)}
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                <Icon name="calendar" className="w-4 h-4 text-gray-400 shrink-0" />
+                {fmtDate(h.starts_at)} · {fmtTime(h.starts_at)}
               </p>
-              {h.venue && <p className="text-sm text-gray-500 truncate">📍 {h.venue}</p>}
+              {h.venue && (
+                <p className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
+                  <Icon name="pin" className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="truncate">{h.venue}</span>
+                </p>
+              )}
 
               {h.status === 'upcoming' && <div className="mt-2"><Countdown target={h.starts_at} /></div>}
 
@@ -314,8 +382,9 @@ export default function Hackathons() {
               <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3">
                 <JoinButton h={h} />
                 <button onClick={() => open(h.id)}
-                  className="text-sm text-emerald-700 font-medium hover:underline ml-auto">
-                  Details →
+                  className="inline-flex items-center gap-1 text-sm text-emerald-700 font-medium hover:underline ml-auto">
+                  Details
+                  <Icon name="arrowRight" className="w-4 h-4" />
                 </button>
               </div>
             </article>
@@ -336,16 +405,31 @@ export default function Hackathons() {
                 </span>
                 <h2 className="text-xl font-bold mt-2 text-gray-900">{detail.name}</h2>
               </div>
-              <button onClick={() => setDetail(null)}
-                className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+              <button onClick={() => setDetail(null)} aria-label="Close"
+                className="text-gray-400 hover:text-gray-700">
+                <Icon name="x" className="w-6 h-6" />
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 text-sm text-gray-600">
-              <span>📅 {fmt(detail.starts_at)}</span>
-              {detail.ends_at && <span>→ {fmt(detail.ends_at)}</span>}
+              <span className="inline-flex items-center gap-2">
+                <Icon name="calendar" className="w-4 h-4 text-gray-400 shrink-0" />
+                {fmt(detail.starts_at)}
+              </span>
+              {detail.ends_at && (
+                <span className="inline-flex items-center gap-2">
+                  <Icon name="arrowRight" className="w-4 h-4 text-gray-400 shrink-0" />
+                  {fmt(detail.ends_at)}
+                </span>
+              )}
               {detail.status === 'upcoming' && <Countdown target={detail.starts_at} />}
             </div>
-            {detail.venue && <p className="text-sm text-gray-600 mt-1">📍 {detail.venue}</p>}
+            {detail.venue && (
+              <p className="text-sm text-gray-600 mt-1 flex items-center gap-2">
+                <Icon name="pin" className="w-4 h-4 text-gray-400 shrink-0" />
+                {detail.venue}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
               <AvatarStack count={detail.participants || 0} />
