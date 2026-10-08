@@ -61,23 +61,59 @@ const TYPE_COPY = {
   award: { title: 'Certificate of Excellence', line: 'in recognition of outstanding achievement and distinguished contribution in' },
 }
 
-// Edit these to the real signatories (leave name '' to show only the role)
+/* ── SIGNATORIES: edit these ──────────────────────────────────────────
+   name  : printed under the line (and drawn as a script signature if no image)
+   role  : e.g. 'Programme Director'
+   image : OPTIONAL path to a scanned signature (transparent PNG works best),
+           e.g. '/signatures/director.png'  (file goes in frontend/public/signatures/)
+   ------------------------------------------------------------------- */
 const SIGNATORIES = [
-  { name: '', role: 'Programme Director' },
-  { name: '', role: 'Chairperson' },
+  { name: '', role: 'Programme Director', image: '' },
+  { name: '', role: 'Chairperson', image: '' },
 ]
 
 const SERIF = "Georgia, 'Times New Roman', Times, serif"
+const SCRIPT = "'Segoe Script', 'Brush Script MT', 'Snell Roundhand', 'Lucida Handwriting', cursive"
 const GOLD = '#c9a227'
 const EMERALD = '#065f46'
 
 const SKELETONS = Array.from({ length: 3 })
 
+const fs = (n) => ({ fontSize: `${n}cqw` })
+
+/* One signature block: signature, line, name, role, organisation */
+function Signature({ person, align }) {
+  const { name, role, image } = person
+  return (
+    <div style={{ justifySelf: align, width: '24cqw', textAlign: 'center' }}>
+      <div style={{
+        height: '6.5cqw', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}>
+        {image ? (
+          <img src={image} alt={`Signature of ${name || role}`}
+            style={{ maxHeight: '6.5cqw', maxWidth: '100%', objectFit: 'contain' }} />
+        ) : name ? (
+          <span style={{
+            fontFamily: SCRIPT, fontSize: '3.2cqw', color: '#1e3a8a', lineHeight: 1,
+            paddingBottom: '0.3cqw', whiteSpace: 'nowrap',
+          }}>
+            {name}
+          </span>
+        ) : null}
+      </div>
+      <div style={{ borderTop: '0.15cqw solid #6b7280', paddingTop: '0.6cqw' }}>
+        {name && <p style={{ ...fs(1.45), fontWeight: 700, margin: 0 }}>{name}</p>}
+        <p style={{ ...fs(1.2), color: '#6b7280', margin: 0 }}>{role}</p>
+        <p style={{ ...fs(1.05), color: '#9ca3af', margin: 0 }}>Turkana Startup Club</p>
+      </div>
+    </div>
+  )
+}
+
 /* ── The certificate itself. Everything is sized in cqw (container width),
       so it scales perfectly on phones, desktops and when printed. ── */
 function CertificateSheet({ cert, verifyUrl }) {
   const copy = TYPE_COPY[cert.activity_type] || TYPE_COPY.participation
-  const fs = (n) => ({ fontSize: `${n}cqw` })
 
   return (
     <div style={{ containerType: 'inline-size', width: '100%' }}>
@@ -135,20 +171,9 @@ function CertificateSheet({ cert, verifyUrl }) {
             display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'end',
             width: '100%', gap: '3cqw',
           }}>
-            {[SIGNATORIES[0], null, SIGNATORIES[1]].map((s, i) =>
-              s ? (
-                <div key={i} style={{ justifySelf: i === 0 ? 'start' : 'end', width: '24cqw' }}>
-                  <div style={{ height: '5cqw' }} />
-                  <div style={{ borderTop: '0.15cqw solid #6b7280', paddingTop: '0.6cqw' }}>
-                    {s.name && <p style={{ ...fs(1.45), fontWeight: 700, margin: 0 }}>{s.name}</p>}
-                    <p style={{ ...fs(1.2), color: '#6b7280', margin: 0 }}>{s.role}</p>
-                    <p style={{ ...fs(1.05), color: '#9ca3af', margin: 0 }}>Turkana Startup Club</p>
-                  </div>
-                </div>
-              ) : (
-                <Seal key={i} style={{ width: '10cqw', height: '10cqw' }} />
-              )
-            )}
+            <Signature person={SIGNATORIES[0]} align="start" />
+            <Seal style={{ width: '10cqw', height: '10cqw' }} />
+            <Signature person={SIGNATORIES[1]} align="end" />
           </div>
 
           {/* Verification footer */}
