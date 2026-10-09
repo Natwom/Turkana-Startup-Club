@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../services/api'
 
@@ -26,7 +26,7 @@ function Icon({ name, className = 'w-4 h-4' }) {
   )
 }
 
-/* ── Certificate seal (emerald + gold) ── */
+/* ── Small seal used on the certificate cards (emerald + gold) ── */
 function Seal({ className = '', style }) {
   return (
     <svg viewBox="0 0 100 100" className={className} style={style} aria-hidden="true">
@@ -61,50 +61,178 @@ const TYPE_COPY = {
   award: { title: 'Certificate of Excellence', line: 'in recognition of outstanding achievement and distinguished contribution in' },
 }
 
-/* ── SIGNATORIES: edit these ──────────────────────────────────────────
-   name  : printed under the line (and drawn as a script signature if no image)
-   role  : e.g. 'Programme Director'
-   image : OPTIONAL path to a scanned signature (transparent PNG works best),
-           e.g. '/signatures/director.png'  (file goes in frontend/public/signatures/)
+/* ── SIGNATORIES ──────────────────────────────────────────────────────
+   name  : printed under the signature line
+   role  : printed in small capitals under the name
+   image : path to the signature image in frontend/public/signatures/
+           Replace these files with a scan of the real signature
+           (a transparent PNG or SVG works best) and keep the same file name.
+           If the image is missing, the name is shown in a script font instead.
    ------------------------------------------------------------------- */
 const SIGNATORIES = [
-  { name: '', role: 'Programme Director', image: '' },
-  { name: '', role: 'Chairperson', image: '' },
+  { name: 'Herod Antipaz', role: 'Operational Director', image: '/signatures/operational-director.svg' },
+  { name: 'Daniel Natwom', role: 'Founder / CEO', image: '/signatures/founder-ceo.svg' },
 ]
 
+/* ── Design tokens ── */
 const SERIF = "Georgia, 'Times New Roman', Times, serif"
-const SCRIPT = "'Segoe Script', 'Brush Script MT', 'Snell Roundhand', 'Lucida Handwriting', cursive"
-const GOLD = '#c9a227'
+const DISPLAY = "'Cormorant Garamond', Georgia, 'Times New Roman', serif"
+const SCRIPT = "'Great Vibes', 'Segoe Script', 'Brush Script MT', 'Snell Roundhand', 'Lucida Handwriting', cursive"
+const GOLD = '#b8922a'
+const GOLD_LIGHT = '#e6c65a'
 const EMERALD = '#065f46'
+const EMERALD_MID = '#047857'
+const INK = '#1e3a8a'
 
 const SKELETONS = Array.from({ length: 3 })
 
 const fs = (n) => ({ fontSize: `${n}cqw` })
 
+// Name size shrinks for long names so they stay on one line
+const nameSize = (name = '') => (name.length > 30 ? 3.9 : name.length > 22 ? 4.8 : name.length > 16 ? 5.6 : 6.4)
+
+// 32-point starburst used for the edge of the gold seal
+const BURST = (() => {
+  const pts = []
+  const n = 32
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 === 0 ? 47 : 43
+    const a = (Math.PI * i) / n - Math.PI / 2
+    pts.push(`${(50 + r * Math.cos(a)).toFixed(2)},${(50 + r * Math.sin(a)).toFixed(2)}`)
+  }
+  return pts.join(' ')
+})()
+
+/* ── Gold embossed seal with ribbon tails ── */
+function GoldSeal({ style }) {
+  const id = useId().replace(/:/g, '')
+  return (
+    <svg viewBox="0 0 100 118" style={style} aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}-gold`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff1a8" />
+          <stop offset="0.45" stopColor="#d9ae2f" />
+          <stop offset="1" stopColor="#9a7410" />
+        </linearGradient>
+        <radialGradient id={`${id}-green`} cx="0.4" cy="0.35" r="0.8">
+          <stop offset="0" stopColor="#0b7a5a" />
+          <stop offset="1" stopColor="#064e3b" />
+        </radialGradient>
+      </defs>
+      {/* ribbon tails */}
+      <polygon points="30,78 48,88 40,117 31,108 21,114" fill={EMERALD} stroke={GOLD} strokeWidth="0.8" />
+      <polygon points="70,78 52,88 60,117 69,108 79,114" fill={EMERALD} stroke={GOLD} strokeWidth="0.8" />
+      {/* disc */}
+      <polygon points={BURST} fill={`url(#${id}-gold)`} stroke="#8a6a12" strokeWidth="0.6" />
+      <circle cx="50" cy="50" r="38" fill="none" stroke="#fff6c8" strokeOpacity="0.7" strokeWidth="1" strokeDasharray="1.6 2" />
+      <circle cx="50" cy="50" r="33" fill={`url(#${id}-green)`} stroke={GOLD_LIGHT} strokeWidth="1.4" />
+      <g transform="translate(50 42) scale(0.74) translate(-50 -50)">
+        <polygon
+          points="50,28 55.29,42.72 70.92,43.2 58.56,52.78 62.93,67.8 50,59 37.07,67.8 41.44,52.78 29.08,43.2 44.71,42.72"
+          fill={GOLD_LIGHT}
+        />
+      </g>
+      <text x="50" y="68" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="10"
+        letterSpacing="1.5" fill={GOLD_LIGHT}>
+        TSC
+      </text>
+    </svg>
+  )
+}
+
+/* ── Corner flourish (drawn once, mirrored into the four corners) ── */
+function Corner({ style }) {
+  return (
+    <svg viewBox="0 0 60 60" style={{ position: 'absolute', width: '9.5cqw', height: '9.5cqw', ...style }} aria-hidden="true">
+      <g fill="none" stroke={GOLD} strokeLinecap="round">
+        <path d="M3 3 V40" strokeWidth="1.6" />
+        <path d="M3 3 H40" strokeWidth="1.6" />
+        <path d="M3 20 A17 17 0 0 0 20 3" strokeWidth="1.1" />
+        <path d="M3 30 A27 27 0 0 0 30 3" strokeWidth="0.7" strokeOpacity="0.8" />
+      </g>
+      <circle cx="11" cy="11" r="2.4" fill={EMERALD} />
+      <circle cx="11" cy="11" r="4.4" fill="none" stroke={GOLD} strokeWidth="0.7" />
+    </svg>
+  )
+}
+
+/* ── Faint acacia mark used as a watermark ── */
+function Watermark({ style }) {
+  return (
+    <svg viewBox="0 0 64 64" style={style} aria-hidden="true">
+      <g fill={EMERALD}>
+        <path d="M10 25.5C14 19.5 22.5 17 32 17S50 19.5 54 25.5C47 23.2 40 22.4 32 22.4S17 23.2 10 25.5Z" />
+        <path d="M17 18.2C21 14.4 26 13 32 13S43 14.4 47 18.2C42 16.6 37.5 16 32 16S22 16.6 17 18.2Z" />
+        <path d="M30.4 22.6H33.6L34 36C34.2 42 35 47 36.4 52H27.6C29 47 29.8 42 30 36Z" />
+        <path d="M31.2 33.5L22.5 25.2L24.3 23.7L32 30Z" />
+        <path d="M32.8 33.5L41.5 25.2L39.7 23.7L32 30Z" />
+        <rect x="17" y="52" width="30" height="3" rx="1.5" />
+      </g>
+    </svg>
+  )
+}
+
+/* ── Small colour logo for the certificate header ── */
+function HeaderMark({ style }) {
+  return (
+    <svg viewBox="0 0 64 64" style={style} aria-hidden="true">
+      <rect width="64" height="64" rx="15" fill="#059669" />
+      <circle cx="50.5" cy="12.5" r="4" fill="#FBBF24" />
+      <path d="M10 25.5C14 19.5 22.5 17 32 17S50 19.5 54 25.5C47 23.2 40 22.4 32 22.4S17 23.2 10 25.5Z" fill="#FFFFFF" />
+      <path d="M17 18.2C21 14.4 26 13 32 13S43 14.4 47 18.2C42 16.6 37.5 16 32 16S22 16.6 17 18.2Z" fill="#D1FAE5" />
+      <path d="M30.4 22.6H33.6L34 36C34.2 42 35 47 36.4 52H27.6C29 47 29.8 42 30 36Z" fill="#FFFFFF" />
+      <path d="M31.2 33.5L22.5 25.2L24.3 23.7L32 30Z" fill="#FFFFFF" />
+      <path d="M32.8 33.5L41.5 25.2L39.7 23.7L32 30Z" fill="#FFFFFF" />
+      <rect x="17" y="52" width="30" height="3" rx="1.5" fill="#A7F3D0" />
+    </svg>
+  )
+}
+
+/* ── Gold divider with a diamond in the middle ── */
+function Divider() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.2cqw', margin: '1cqw 0 0.9cqw' }}>
+      <span style={{ width: '14cqw', height: '0.18cqw', background: `linear-gradient(90deg, transparent, ${GOLD})` }} />
+      <span style={{ width: '0.9cqw', height: '0.9cqw', background: GOLD, transform: 'rotate(45deg)' }} />
+      <span style={{ width: '14cqw', height: '0.18cqw', background: `linear-gradient(270deg, transparent, ${GOLD})` }} />
+    </div>
+  )
+}
+
 /* One signature block: signature, line, name, role, organisation */
 function Signature({ person, align }) {
   const { name, role, image } = person
+  const [broken, setBroken] = useState(false)
+  const showImage = image && !broken
+
   return (
-    <div style={{ justifySelf: align, width: '24cqw', textAlign: 'center' }}>
-      <div style={{
-        height: '6.5cqw', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      }}>
-        {image ? (
-          <img src={image} alt={`Signature of ${name || role}`}
-            style={{ maxHeight: '6.5cqw', maxWidth: '100%', objectFit: 'contain' }} />
+    <div style={{ justifySelf: align, width: '25cqw', textAlign: 'center' }}>
+      <div style={{ height: '6cqw', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        {showImage ? (
+          <img
+            src={image}
+            alt={`Signature of ${name}`}
+            onError={() => setBroken(true)}
+            style={{ width: '22cqw', maxHeight: '6cqw', objectFit: 'contain', display: 'block' }}
+          />
         ) : name ? (
           <span style={{
-            fontFamily: SCRIPT, fontSize: '3.2cqw', color: '#1e3a8a', lineHeight: 1,
-            paddingBottom: '0.3cqw', whiteSpace: 'nowrap',
+            fontFamily: SCRIPT, fontSize: '3.4cqw', color: INK, lineHeight: 1,
+            paddingBottom: '0.4cqw', whiteSpace: 'nowrap',
           }}>
             {name}
           </span>
         ) : null}
       </div>
-      <div style={{ borderTop: '0.15cqw solid #6b7280', paddingTop: '0.6cqw' }}>
-        {name && <p style={{ ...fs(1.45), fontWeight: 700, margin: 0 }}>{name}</p>}
-        <p style={{ ...fs(1.2), color: '#6b7280', margin: 0 }}>{role}</p>
-        <p style={{ ...fs(1.05), color: '#9ca3af', margin: 0 }}>Turkana Startup Club</p>
+      <div style={{ borderTop: '0.15cqw solid #4b5563', paddingTop: '0.7cqw' }}>
+        <p style={{ ...fs(1.6), fontWeight: 700, color: '#111827', margin: 0 }}>{name}</p>
+        <p style={{
+          ...fs(1.1), color: EMERALD_MID, margin: '0.25cqw 0 0', fontWeight: 700,
+          letterSpacing: '0.14em', textTransform: 'uppercase',
+        }}>
+          {role}
+        </p>
+        <p style={{ ...fs(1.0), color: '#9ca3af', margin: '0.25cqw 0 0' }}>Turkana Startup Club</p>
       </div>
     </div>
   )
@@ -118,50 +246,81 @@ function CertificateSheet({ cert, verifyUrl }) {
   return (
     <div style={{ containerType: 'inline-size', width: '100%' }}>
       <div style={{
-        position: 'relative', width: '100%', aspectRatio: '1.414 / 1',
-        background: '#fffdf7', color: '#1f2937', fontFamily: SERIF, overflow: 'hidden',
+        position: 'relative', width: '100%', aspectRatio: '1.414 / 1', color: '#1f2937',
+        fontFamily: SERIF, overflow: 'hidden',
+        background: 'radial-gradient(ellipse at center, #fffef9 0%, #fbf5e2 100%)',
       }}>
-        {/* Double border */}
-        <div style={{ position: 'absolute', inset: '1.6cqw', border: `0.7cqw solid ${EMERALD}` }} />
-        <div style={{ position: 'absolute', inset: '2.8cqw', border: `0.2cqw solid ${GOLD}` }} />
+        {/* fine diagonal texture */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'repeating-linear-gradient(45deg, rgba(6,95,70,0.028) 0 0.35cqw, transparent 0.35cqw 0.7cqw)',
+        }} />
+
+        {/* watermark */}
+        <Watermark style={{
+          position: 'absolute', left: '50%', top: '50%', width: '40cqw', height: '40cqw',
+          transform: 'translate(-50%, -52%)', opacity: 0.055, pointerEvents: 'none',
+        }} />
+
+        {/* triple border */}
+        <div style={{ position: 'absolute', inset: '1.4cqw', border: `0.9cqw solid ${EMERALD}` }} />
+        <div style={{ position: 'absolute', inset: '2.7cqw', border: `0.25cqw solid ${GOLD}` }} />
+        <div style={{ position: 'absolute', inset: '3.3cqw', border: `0.08cqw solid ${EMERALD}`, opacity: 0.6 }} />
+
+        {/* corner flourishes */}
+        <Corner style={{ top: '3.3cqw', left: '3.3cqw' }} />
+        <Corner style={{ top: '3.3cqw', right: '3.3cqw', transform: 'scaleX(-1)' }} />
+        <Corner style={{ bottom: '3.3cqw', left: '3.3cqw', transform: 'scaleY(-1)' }} />
+        <Corner style={{ bottom: '3.3cqw', right: '3.3cqw', transform: 'scale(-1, -1)' }} />
 
         <div style={{
-          position: 'absolute', inset: '5cqw 7cqw 4.4cqw', display: 'flex',
+          position: 'absolute', inset: '5cqw 9cqw 4.4cqw', display: 'flex',
           flexDirection: 'column', alignItems: 'center', textAlign: 'center',
         }}>
           {/* Header */}
-          <p style={{ ...fs(1.45), letterSpacing: '0.38em', color: '#047857', fontWeight: 700, margin: 0 }}>
+          <HeaderMark style={{ width: '3.4cqw', height: '3.4cqw' }} />
+          <p style={{
+            ...fs(1.35), letterSpacing: '0.42em', color: EMERALD_MID, fontWeight: 700,
+            margin: '0.6cqw 0 0', paddingLeft: '0.42em',
+          }}>
             TURKANA STARTUP CLUB
           </p>
-          <h2 style={{ ...fs(4.6), fontWeight: 700, color: '#064e3b', margin: '1cqw 0 0', lineHeight: 1.15 }}>
+          <h2 style={{
+            fontFamily: DISPLAY, ...fs(4.9), fontWeight: 700, color: '#064e3b',
+            margin: '0.6cqw 0 0', lineHeight: 1.12, letterSpacing: '0.01em',
+          }}>
             {copy.title}
           </h2>
-          <div style={{ width: '14cqw', height: '0.2cqw', background: GOLD, margin: '1.2cqw 0' }} />
+          <Divider />
 
           {/* Recipient */}
-          <p style={{ ...fs(1.55), fontStyle: 'italic', color: '#4b5563', margin: 0 }}>
+          <p style={{ ...fs(1.5), fontStyle: 'italic', color: '#4b5563', margin: 0 }}>
             This certificate is proudly presented to
           </p>
           <p style={{
-            ...fs(5.2), fontStyle: 'italic', fontWeight: 600, color: EMERALD, margin: '1cqw 0 0',
-            padding: '0 4cqw 0.4cqw', borderBottom: `0.18cqw solid ${GOLD}`, maxWidth: '80cqw',
-            lineHeight: 1.2, overflowWrap: 'anywhere',
+            fontFamily: SCRIPT, ...fs(nameSize(cert.holder)), fontWeight: 400, color: EMERALD,
+            margin: '0.5cqw 0 0', padding: '0 5cqw 0.5cqw', maxWidth: '82cqw', lineHeight: 1.25,
+            overflowWrap: 'anywhere',
+            borderBottom: `0.18cqw solid ${GOLD}`,
           }}>
             {cert.holder}
           </p>
 
           {/* Citation */}
-          <p style={{ ...fs(1.6), color: '#4b5563', margin: '1.4cqw 0 0' }}>{copy.line}</p>
-          <p style={{ ...fs(2.7), fontWeight: 700, color: '#111827', margin: '0.5cqw 0 0', maxWidth: '78cqw', lineHeight: 1.25 }}>
+          <p style={{ ...fs(1.5), color: '#4b5563', margin: '1.1cqw 0 0' }}>{copy.line}</p>
+          <p style={{
+            fontFamily: DISPLAY, ...fs(2.7), fontWeight: 700, color: '#111827',
+            margin: '0.4cqw 0 0', maxWidth: '76cqw', lineHeight: 1.2,
+          }}>
             {cert.title}
           </p>
           {cert.description && (
-            <p style={{ ...fs(1.35), color: '#6b7280', margin: '0.8cqw 0 0', maxWidth: '70cqw', lineHeight: 1.45 }}>
+            <p style={{ ...fs(1.25), color: '#6b7280', margin: '0.7cqw 0 0', maxWidth: '68cqw', lineHeight: 1.4 }}>
               {cert.description}
             </p>
           )}
-          <p style={{ ...fs(1.4), color: '#6b7280', margin: '1cqw 0 0' }}>
-            {cert.event_date ? `Held on ${fmtDate(cert.event_date)} · ` : ''}Issued on {fmtDate(cert.issued_at)}
+          <p style={{ ...fs(1.3), color: '#6b7280', margin: '0.8cqw 0 0' }}>
+            {cert.event_date ? `Held on ${fmtDate(cert.event_date)}  ·  ` : ''}Issued on {fmtDate(cert.issued_at)}
           </p>
 
           <div style={{ flex: 1 }} />
@@ -169,24 +328,25 @@ function CertificateSheet({ cert, verifyUrl }) {
           {/* Signatures + seal */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'end',
-            width: '100%', gap: '3cqw',
+            width: '100%', gap: '2cqw',
           }}>
             <Signature person={SIGNATORIES[0]} align="start" />
-            <Seal style={{ width: '10cqw', height: '10cqw' }} />
+            <GoldSeal style={{ width: '9cqw', height: '10.6cqw' }} />
             <Signature person={SIGNATORIES[1]} align="end" />
           </div>
 
           {/* Verification footer */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.6cqw',
-            width: '100%', marginTop: '2cqw', paddingTop: '1.2cqw', borderTop: `0.12cqw solid ${GOLD}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.4cqw',
+            width: '100%', marginTop: '1.4cqw', paddingTop: '1cqw',
+            borderTop: `0.1cqw solid ${GOLD}`,
           }}>
-            <QRCodeSVG value={verifyUrl} size={96} style={{ width: '6.2cqw', height: '6.2cqw' }} />
+            <QRCodeSVG value={verifyUrl} size={96} style={{ width: '5.2cqw', height: '5.2cqw' }} />
             <div style={{ textAlign: 'left' }}>
-              <p style={{ ...fs(1.2), color: '#374151', margin: 0 }}>
+              <p style={{ ...fs(1.1), color: '#374151', margin: 0 }}>
                 Certificate ID: <strong style={{ fontFamily: 'monospace' }}>{cert.certificate_id}</strong>
               </p>
-              <p style={{ ...fs(1.05), color: '#6b7280', margin: '0.3cqw 0 0' }}>
+              <p style={{ ...fs(0.95), color: '#6b7280', margin: '0.25cqw 0 0' }}>
                 Scan the code or visit {verifyUrl} to verify this certificate.
               </p>
             </div>
@@ -254,6 +414,7 @@ export default function Certificates() {
   return (
     <div className="max-w-6xl mx-auto pb-16">
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Great+Vibes&display=swap');
         @media print {
           @page { size: A4 landscape; margin: 0; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
