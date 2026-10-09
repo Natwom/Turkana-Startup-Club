@@ -150,6 +150,7 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault()
     setError('')
+    // The terms checkbox must be ticked before an account can be created
     if (!acceptTerms) {
       showError('You must accept the Terms and Conditions to create an account.')
       return
@@ -187,6 +188,11 @@ export default function Register() {
   useEffect(() => {
     if (error && errRef.current) errRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [error, errorKey])
+
+  // once the terms are accepted, clear the "must accept" error
+  useEffect(() => {
+    if (acceptTerms) setError((prev) => (prev.startsWith('You must accept') ? '' : prev))
+  }, [acceptTerms])
 
   // spotlight in the side panel follows the mouse
   const onAsideMove = (e) => {
@@ -497,7 +503,10 @@ export default function Register() {
             </Section>
           </div>
 
-          <label className="mb-5 mt-6 flex cursor-pointer items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700 transition hover:border-emerald-200">
+          {/* Terms: the checkbox must be ticked before the account can be created */}
+          <label className={`mt-6 flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm text-gray-700 transition ${
+            acceptTerms ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-gray-50 hover:border-emerald-200'
+          }`}>
             <input
               type="checkbox"
               required
@@ -519,10 +528,15 @@ export default function Register() {
             </span>
           </label>
 
+          <p className={`mb-5 mt-2 text-xs transition-opacity duration-300 ${acceptTerms ? 'opacity-0' : 'text-amber-600 opacity-100'}`}>
+            Tick the box above to enable account creation.
+          </p>
+
           <button
             type="submit"
-            disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 py-2.5 font-medium text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60 disabled:hover:shadow-sm"
+            disabled={submitting || !acceptTerms}
+            title={!acceptTerms ? 'Accept the Terms and Conditions to continue' : undefined}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 py-2.5 font-medium text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-sm"
           >
             {submitting && (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
