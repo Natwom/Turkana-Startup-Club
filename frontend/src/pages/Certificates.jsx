@@ -70,7 +70,6 @@ const TYPE_COPY = {
            If the image is missing, the name is shown in a script font instead.
    ------------------------------------------------------------------- */
 const SIGNATORIES = [
-  { name: 'Herod Antipaz', role: 'Operational Director', image: '/signatures/operational-director.svg' },
   { name: 'Daniel Natwom', role: 'Founder / CEO', image: '/signatures/founder-ceo.svg' },
 ]
 
@@ -325,14 +324,14 @@ function CertificateSheet({ cert, verifyUrl }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Signatures + seal */}
+          {/* Signature + seal */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'end',
             width: '100%', gap: '2cqw',
           }}>
-            <Signature person={SIGNATORIES[0]} align="start" />
+            <div />
             <GoldSeal style={{ width: '9cqw', height: '10.6cqw' }} />
-            <Signature person={SIGNATORIES[1]} align="end" />
+            <Signature person={SIGNATORIES[0]} align="end" />
           </div>
 
           {/* Verification footer */}
