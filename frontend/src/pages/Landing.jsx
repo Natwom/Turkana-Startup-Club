@@ -1,5 +1,5 @@
 // pages/Landing.jsx
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 /* ── Inline SVG icon set (no extra dependency needed) ── */
@@ -25,6 +25,9 @@ const ICON_PATHS = {
     'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0',
   bulb:
     'M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18',
+  menu: 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5',
+  close: 'M6 18 18 6M6 6l12 12',
+  up: 'M4.5 15.75l7.5-7.5 7.5 7.5',
 }
 
 function Icon({ name, className = 'w-6 h-6' }) {
@@ -173,74 +176,484 @@ const socials = [
   ['YouTube', 'https://youtube.com', 'youtube'],
 ]
 
-function FAQ({ q, a, open, onToggle }) {
+// Sections shown in the nav: [id, label]
+const NAV = [
+  ['pillars', 'Pillars'],
+  ['features', 'Features'],
+  ['how', 'How It Works'],
+  ['faq', 'FAQ'],
+]
+
+// Words the hero types out, one after another
+const TYPED_WORDS = ['builders', 'founders', 'developers', 'mentors', 'dreamers']
+
+const TESTIMONIAL_MS = 6000
+
+/* ═══════════════════════════ Hooks ═══════════════════════════ */
+
+// Respect the visitor's "reduce motion" setting
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setReduced(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return reduced
+}
+
+// true once the element has scrolled into view (fires once)
+function useInView(reduced, threshold = 0.15) {
+  const ref = useRef(null)
+  const [seen, setSeen] = useState(false)
+
+  useEffect(() => {
+    if (reduced) { setSeen(true); return }
+    const el = ref.current
+    if (!el) return
+    if (!('IntersectionObserver' in window)) { setSeen(true); return }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) { setSeen(true); io.disconnect() }
+      },
+      { threshold, rootMargin: '0px 0px -8% 0px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [reduced, threshold])
+
+  return [ref, seen]
+}
+
+// Types a word, pauses, deletes it, moves to the next
+function useTypewriter(words, reduced) {
+  const [text, setText] = useState(reduced ? words[0] : '')
+
+  useEffect(() => {
+    if (reduced) { setText(words[0]); return }
+    let wordIdx = 0
+    let charIdx = 0
+    let deleting = false
+    let timer
+
+    const tick = () => {
+      const word = words[wordIdx]
+      if (!deleting) {
+        charIdx += 1
+        setText(word.slice(0, charIdx))
+        if (charIdx === word.length) {
+          deleting = true
+          timer = setTimeout(tick, 1600)
+          return
+        }
+        timer = setTimeout(tick, 85)
+      } else {
+        charIdx -= 1
+        setText(word.slice(0, charIdx))
+        if (charIdx === 0) {
+          deleting = false
+          wordIdx = (wordIdx + 1) % words.length
+          timer = setTimeout(tick, 350)
+          return
+        }
+        timer = setTimeout(tick, 45)
+      }
+    }
+
+    timer = setTimeout(tick, 600)
+    return () => clearTimeout(timer)
+  }, [words, reduced])
+
+  return text
+}
+
+/* ═══════════════════════ Small components ═══════════════════════ */
+
+// Fades + slides its children up when scrolled into view
+function Reveal({ children, delay = 0, className = '', reduced }) {
+  const [ref, seen] = useInView(reduced)
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-5 py-4 text-left bg-white hover:bg-gray-50">
-        <span className="font-medium text-gray-800">{q}</span>
-        <span className={`ml-4 text-emerald-600 transition-transform ${open ? 'rotate-45' : ''}`}>+</span>
-      </button>
-      {open && <p className="px-5 pb-4 text-sm text-gray-600 border-t border-gray-100 pt-3">{a}</p>}
+    <div
+      ref={ref}
+      style={{ transitionDelay: seen && !reduced ? `${delay}ms` : '0ms' }}
+      className={`transition-all duration-700 ease-out ${
+        seen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+      } ${className}`}
+    >
+      {children}
     </div>
   )
 }
 
-export default function Landing() {
-  const [scrolled, setScrolled] = useState(false)
-  const [openFaq, setOpenFaq] = useState(0)
+// Feature card with a soft green spotlight that follows the cursor
+function FeatureCard({ icon, title, desc }) {
+  const ref = useRef(null)
+
+  const onMove = (e) => {
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--mx', `${e.clientX - r.left}px`)
+    el.style.setProperty('--my', `${e.clientY - r.top}px`)
+  }
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      className="group relative h-full overflow-hidden bg-white rounded-2xl p-6 border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ background: 'radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(16,185,129,0.14), transparent 70%)' }}
+      />
+      <span className="relative w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+        <Icon name={icon} className="w-6 h-6" />
+      </span>
+      <h3 className="relative mt-4 font-bold text-lg">{title}</h3>
+      <p className="relative mt-2 text-sm text-gray-600">{desc}</p>
+    </div>
+  )
+}
+
+// Accordion item with a smooth open/close height animation
+function FAQ({ q, a, open, onToggle }) {
+  return (
+    <div className={`border rounded-xl overflow-hidden transition-colors duration-300 ${open ? 'border-emerald-300 shadow-sm' : 'border-gray-200'}`}>
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-5 py-4 text-left bg-white hover:bg-gray-50"
+      >
+        <span className="font-medium text-gray-800">{q}</span>
+        <span className={`ml-4 text-xl leading-none text-emerald-600 transition-transform duration-300 ${open ? 'rotate-45' : ''}`}>+</span>
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <p className="px-5 pb-4 text-sm text-gray-600 border-t border-gray-100 pt-3">{a}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Auto-rotating testimonial carousel (pauses on hover / focus)
+function Testimonials({ reduced }) {
+  const [idx, setIdx] = useState(0)
+  const [paused, setPaused] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
+    if (paused || reduced) return
+    const t = setTimeout(() => setIdx((i) => (i + 1) % testimonials.length), TESTIMONIAL_MS)
+    return () => clearTimeout(t)
+  }, [idx, paused, reduced])
+
+  return (
+    <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      {/* All quotes share one grid cell so the height never jumps */}
+      <div className="grid max-w-3xl mx-auto">
+        {testimonials.map((t, i) => (
+          <figure
+            key={t.name}
+            aria-hidden={i !== idx}
+            className={`col-start-1 row-start-1 text-center bg-white/10 border border-white/15 rounded-3xl px-6 py-10 md:px-12 backdrop-blur-sm
+              transition-all duration-700 ease-out
+              ${i === idx ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95 pointer-events-none'}`}
+          >
+            <span className="block text-5xl leading-none text-emerald-300/70 font-serif" aria-hidden="true">“</span>
+            <blockquote className="mt-2 text-xl md:text-2xl text-emerald-50 leading-relaxed">{t.quote}</blockquote>
+            <figcaption className="mt-6">
+              <p className="font-semibold">{t.name}</p>
+              <p className="text-sm text-emerald-200">{t.role}</p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      {/* Tabs with a progress bar that fills while the quote is showing */}
+      <div className="mt-8 max-w-3xl mx-auto grid grid-cols-3 gap-3">
+        {testimonials.map((t, i) => (
+          <button
+            key={t.name}
+            onClick={() => setIdx(i)}
+            aria-label={`Show story from ${t.name}`}
+            aria-current={i === idx}
+            className="group text-left"
+          >
+            <span className="block h-1 rounded-full bg-white/20 overflow-hidden">
+              <span
+                key={`${i}-${idx === i ? 'on' : 'off'}`}
+                className="block h-full bg-emerald-300 origin-left"
+                style={{
+                  transform: i < idx || (i === idx && reduced) ? 'scaleX(1)' : i === idx ? undefined : 'scaleX(0)',
+                  animation: i === idx && !reduced ? `tsc-fill ${TESTIMONIAL_MS}ms linear forwards` : 'none',
+                  animationPlayState: paused ? 'paused' : 'running',
+                }}
+              />
+            </span>
+            <span className={`mt-2 block text-xs sm:text-sm truncate transition-colors ${i === idx ? 'text-white font-medium' : 'text-emerald-200 group-hover:text-white'}`}>
+              {t.name}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════ Page ═══════════════════════════ */
+
+export default function Landing() {
+  const reduced = usePrefersReducedMotion()
+
+  const [scrolled, setScrolled] = useState(false)
+  const [showTop, setShowTop] = useState(false)
+  const [openFaq, setOpenFaq] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [activeId, setActiveId] = useState('')
+
+  const progressRef = useRef(null)
+  const heroRef = useRef(null)
+  const dotsRef = useRef(null)
+  const blobARef = useRef(null)
+  const blobBRef = useRef(null)
+
+  const typed = useTypewriter(TYPED_WORDS, reduced)
+  const [howRef, howSeen] = useInView(reduced, 0.25)
+
+  // One scroll listener (throttled with rAF): progress bar, header, parallax, back-to-top
+  useEffect(() => {
+    let ticking = false
+
+    const update = () => {
+      ticking = false
+      const y = window.scrollY
+      const max = document.documentElement.scrollHeight - window.innerHeight
+
+      if (progressRef.current) {
+        progressRef.current.style.transform = `scaleX(${max > 0 ? Math.min(y / max, 1) : 0})`
+      }
+      setScrolled(y > 10)
+      setShowTop(y > 600)
+
+      if (!reduced && y < 900) {
+        if (dotsRef.current) dotsRef.current.style.transform = `translateY(${y * 0.15}px)`
+        if (blobARef.current) blobARef.current.style.transform = `translateY(${y * 0.25}px)`
+        if (blobBRef.current) blobBRef.current.style.transform = `translateY(${y * -0.12}px)`
+      }
+    }
+
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true
+        requestAnimationFrame(update)
+      }
+    }
+
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [reduced])
+
+  // Highlight the nav link of the section currently in view
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => { if (e.isIntersecting) setActiveId(e.target.id) })
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    )
+    NAV.forEach(([id]) => {
+      const el = document.getElementById(id)
+      if (el) io.observe(el)
+    })
+    return () => io.disconnect()
   }, [])
+
+  // Close the mobile menu with Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Smooth-scroll to a section
+  const goTo = useCallback((e, id) => {
+    e.preventDefault()
+    const el = document.getElementById(id)
+    if (el) {
+      el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+      window.history.replaceState(null, '', `#${id}`)
+    }
+    setMenuOpen(false)
+  }, [reduced])
+
+  const scrollTop = () => window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+
+  // Hero spotlight follows the mouse
+  const onHeroMove = (e) => {
+    const el = heroRef.current
+    if (!el || reduced) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--x', `${e.clientX - r.left}px`)
+    el.style.setProperty('--y', `${e.clientY - r.top}px`)
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-800">
+      <style>{`
+        @keyframes tsc-blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+        @keyframes tsc-fill  { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+        @keyframes tsc-float {
+          0%, 100% { translate: 0 0 }
+          50% { translate: 0 -18px }
+        }
+        .tsc-caret { animation: tsc-blink 1s steps(1) infinite; }
+        .tsc-float { animation: tsc-float 7s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .tsc-caret, .tsc-float { animation: none; }
+        }
+      `}</style>
+
+      {/* ── Scroll progress bar ── */}
+      <div
+        ref={progressRef}
+        aria-hidden="true"
+        className="fixed top-0 left-0 z-[60] h-1 w-full origin-left bg-gradient-to-r from-emerald-400 to-teal-400"
+        style={{ transform: 'scaleX(0)' }}
+      />
 
       {/* ── Header (sticky, blurs on scroll) ── */}
       <header className={`sticky top-0 z-50 transition-all ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm' : 'bg-white'}`}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2" onClick={() => setMenuOpen(false)}>
             <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center">T</span>
             <span className="font-bold text-xl text-emerald-700">Turkana Startup Club</span>
           </Link>
+
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
-            <a href="#pillars" className="hover:text-emerald-700">Pillars</a>
-            <a href="#features" className="hover:text-emerald-700">Features</a>
-            <a href="#how" className="hover:text-emerald-700">How It Works</a>
-            <a href="#faq" className="hover:text-emerald-700">FAQ</a>
+            {NAV.map(([id, label]) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                onClick={(e) => goTo(e, id)}
+                className={`relative py-1 transition-colors hover:text-emerald-700 ${activeId === id ? 'text-emerald-700 font-medium' : ''}`}
+              >
+                {label}
+                <span className={`absolute left-0 -bottom-0.5 h-0.5 rounded bg-emerald-500 transition-all duration-300 ${activeId === id ? 'w-full' : 'w-0'}`} />
+              </a>
+            ))}
           </nav>
+
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-gray-700 hover:text-gray-900">Login</Link>
             <Link to="/register" className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm">
               Join TSC
             </Link>
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100"
+            >
+              <Icon name={menuOpen ? 'close' : 'menu'} className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile menu (slides open) */}
+        <div
+          className="md:hidden grid transition-[grid-template-rows] duration-300 ease-out border-gray-100"
+          style={{ gridTemplateRows: menuOpen ? '1fr' : '0fr', borderTopWidth: menuOpen ? 1 : 0 }}
+        >
+          <div className="overflow-hidden">
+            <nav className="px-4 py-3 flex flex-col text-sm">
+              {NAV.map(([id, label]) => (
+                <a
+                  key={id}
+                  href={`#${id}`}
+                  onClick={(e) => goTo(e, id)}
+                  className={`px-3 py-2.5 rounded-lg ${activeId === id ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
           </div>
         </div>
       </header>
 
       {/* ── Hero ── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white">
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+      <section
+        ref={heroRef}
+        onMouseMove={onHeroMove}
+        className="relative overflow-hidden bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white"
+      >
+        {/* dotted pattern (drifts slightly on scroll) */}
+        <div
+          ref={dotsRef}
+          className="absolute -inset-10 opacity-10 will-change-transform"
+          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }}
+        />
+
+        {/* floating glow blobs */}
+        <div ref={blobARef} className="absolute -top-24 -left-24 will-change-transform" aria-hidden="true">
+          <div className="tsc-float w-72 h-72 rounded-full bg-emerald-400/20 blur-3xl" />
+        </div>
+        <div ref={blobBRef} className="absolute -bottom-32 -right-20 will-change-transform" aria-hidden="true">
+          <div className="tsc-float w-80 h-80 rounded-full bg-teal-300/20 blur-3xl" style={{ animationDelay: '-3s' }} />
+        </div>
+
+        {/* cursor spotlight */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(420px circle at var(--x, 50%) var(--y, 30%), rgba(255,255,255,0.13), transparent 65%)' }}
+        />
+
         <div className="relative max-w-4xl mx-auto px-4 py-24 md:py-32 text-center">
           <span className="inline-flex items-center gap-2 px-3 py-1 mb-6 text-xs font-semibold tracking-wide bg-white/10 border border-white/20 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-300" />
+            <span className="relative flex w-2 h-2">
+              {!reduced && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />}
+              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-300" />
+            </span>
             Empowering Turkana's builders, founders & dreamers
           </span>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
             The digital home of Turkana's<br className="hidden md:block" /> startup ecosystem
           </h1>
+
+          {/* typewriter line */}
+          <p className="mt-5 text-xl md:text-2xl font-semibold text-emerald-200 h-8" aria-live="off">
+            Made for <span className="text-white">{typed}</span>
+            <span className="tsc-caret ml-0.5 inline-block w-0.5 h-6 align-middle bg-emerald-200" aria-hidden="true" />
+          </p>
+
           <p className="mt-6 text-emerald-100 text-lg max-w-2xl mx-auto">
             Community · Networking · Events · Hackathons · Projects · Mentorship · Incubation — everything you need to turn an idea into a venture.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
-            <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg transition">
+            <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg hover:-translate-y-0.5 transition-all">
               Join TSC — It's Free
             </Link>
-            <Link to="/events" className="px-6 py-3 border border-white/40 rounded-lg hover:bg-white/10 transition">
-              Explore Events →
+            <Link to="/events" className="group px-6 py-3 border border-white/40 rounded-lg hover:bg-white/10 transition">
+              Explore Events <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
             </Link>
           </div>
         </div>
@@ -248,16 +661,18 @@ export default function Landing() {
         {/* Highlights bar (replaces the old numeric stats) */}
         <div className="relative bg-white text-gray-800 border-t border-emerald-900/10">
           <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-            {highlights.map(([title, sub, icon]) => (
-              <div key={title} className="flex items-center gap-3">
-                <span className="w-10 h-10 shrink-0 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Icon name={icon} className="w-5 h-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 leading-tight">{title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
+            {highlights.map(([title, sub, icon], i) => (
+              <Reveal key={title} delay={i * 90} reduced={reduced}>
+                <div className="group flex items-center gap-3">
+                  <span className="w-10 h-10 shrink-0 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 transition-all duration-300">
+                    <Icon name={icon} className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 leading-tight">{title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
+                  </div>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -265,20 +680,21 @@ export default function Landing() {
 
       {/* ── Five Pillars ── */}
       <section id="pillars" className="max-w-6xl mx-auto px-4 py-20 scroll-mt-20">
-        <div className="text-center mb-12">
+        <Reveal reduced={reduced} className="text-center mb-12">
           <h2 className="text-3xl font-bold">Our Five Pillars</h2>
           <p className="mt-3 text-gray-500 max-w-xl mx-auto">Everything we do is organized around five pillars designed to move you from idea to impact.</p>
-        </div>
+        </Reveal>
         <div className="grid md:grid-cols-5 gap-4">
           {pillars.map(([name, desc, icon], i) => (
-            <div key={name}
-              className="group border rounded-2xl p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-200 bg-gradient-to-b from-white to-gray-50">
-              <span className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <Icon name={icon} className="w-6 h-6" />
-              </span>
-              <h3 className="mt-4 font-bold text-emerald-700">{String(i + 1).padStart(2, '0')} · {name}</h3>
-              <p className="mt-2 text-sm text-gray-600">{desc}</p>
-            </div>
+            <Reveal key={name} delay={i * 100} reduced={reduced}>
+              <div className="group h-full border rounded-2xl p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-200 bg-gradient-to-b from-white to-gray-50">
+                <span className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
+                  <Icon name={icon} className="w-6 h-6" />
+                </span>
+                <h3 className="mt-4 font-bold text-emerald-700">{String(i + 1).padStart(2, '0')} · {name}</h3>
+                <p className="mt-2 text-sm text-gray-600">{desc}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -286,19 +702,15 @@ export default function Landing() {
       {/* ── Features ── */}
       <section id="features" className="bg-gray-50 border-y scroll-mt-20">
         <div className="max-w-6xl mx-auto px-4 py-20">
-          <div className="text-center mb-12">
+          <Reveal reduced={reduced} className="text-center mb-12">
             <h2 className="text-3xl font-bold">One Platform, Everything You Need</h2>
             <p className="mt-3 text-gray-500 max-w-xl mx-auto">Join and instantly access the tools that power Turkana's startup community.</p>
-          </div>
+          </Reveal>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f) => (
-              <div key={f.title} className="bg-white rounded-2xl p-6 border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-                <span className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Icon name={f.icon} className="w-6 h-6" />
-                </span>
-                <h3 className="mt-4 font-bold text-lg">{f.title}</h3>
-                <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
-              </div>
+            {features.map((f, i) => (
+              <Reveal key={f.title} delay={(i % 3) * 110} reduced={reduced}>
+                <FeatureCard {...f} />
+              </Reveal>
             ))}
           </div>
         </div>
@@ -306,19 +718,32 @@ export default function Landing() {
 
       {/* ── How It Works ── */}
       <section id="how" className="max-w-6xl mx-auto px-4 py-20 scroll-mt-20">
-        <div className="text-center mb-12">
+        <Reveal reduced={reduced} className="text-center mb-12">
           <h2 className="text-3xl font-bold">How It Works</h2>
           <p className="mt-3 text-gray-500">From sign-up to scale-up in three simple steps.</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-6">
+        </Reveal>
+        <div ref={howRef} className="relative grid md:grid-cols-3 gap-6">
+          {/* connector line that draws itself across the circles */}
+          <div className="hidden md:block absolute top-7 left-[16.6%] right-[16.6%] h-0.5 bg-emerald-100" aria-hidden="true">
+            <div
+              className="h-full bg-emerald-500 origin-left transition-transform ease-out"
+              style={{
+                transform: howSeen ? 'scaleX(1)' : 'scaleX(0)',
+                transitionDuration: reduced ? '0ms' : '1400ms',
+                transitionDelay: reduced ? '0ms' : '300ms',
+              }}
+            />
+          </div>
           {steps.map(([title, desc], i) => (
-            <div key={title} className="relative text-center px-6">
-              <span className="w-14 h-14 mx-auto rounded-full bg-emerald-600 text-white text-xl font-bold flex items-center justify-center shadow-lg">
-                {i + 1}
-              </span>
-              <h3 className="mt-5 font-bold text-lg">{title}</h3>
-              <p className="mt-2 text-sm text-gray-600">{desc}</p>
-            </div>
+            <Reveal key={title} delay={i * 250} reduced={reduced}>
+              <div className="relative text-center px-6">
+                <span className="relative z-10 w-14 h-14 mx-auto rounded-full bg-emerald-600 text-white text-xl font-bold flex items-center justify-center shadow-lg ring-4 ring-white hover:scale-110 transition-transform duration-300">
+                  {i + 1}
+                </span>
+                <h3 className="mt-5 font-bold text-lg">{title}</h3>
+                <p className="mt-2 text-sm text-gray-600">{desc}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -326,48 +751,48 @@ export default function Landing() {
       {/* ── Testimonials ── */}
       <section className="bg-emerald-700 text-white">
         <div className="max-w-6xl mx-auto px-4 py-20">
-          <h2 className="text-3xl font-bold text-center mb-12">Stories from Our Community</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <figure key={t.name} className="bg-white/10 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-                <blockquote className="text-emerald-50">“{t.quote}”</blockquote>
-                <figcaption className="mt-5">
-                  <p className="font-semibold">{t.name}</p>
-                  <p className="text-sm text-emerald-200">{t.role}</p>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+          <Reveal reduced={reduced}>
+            <h2 className="text-3xl font-bold text-center mb-12">Stories from Our Community</h2>
+          </Reveal>
+          <Reveal reduced={reduced} delay={150}>
+            <Testimonials reduced={reduced} />
+          </Reveal>
         </div>
       </section>
 
       {/* ── FAQ ── */}
       <section id="faq" className="max-w-3xl mx-auto px-4 py-20 scroll-mt-20">
-        <div className="text-center mb-10">
+        <Reveal reduced={reduced} className="text-center mb-10">
           <h2 className="text-3xl font-bold">Frequently Asked Questions</h2>
           <p className="mt-3 text-gray-500">Everything you need to know about joining TSC.</p>
-        </div>
+        </Reveal>
         <div className="space-y-3">
           {faqs.map(([q, a], i) => (
-            <FAQ key={q} q={q} a={a} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? -1 : i)} />
+            <Reveal key={q} delay={i * 80} reduced={reduced}>
+              <FAQ q={q} a={a} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? -1 : i)} />
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Final CTA ── */}
       <section className="max-w-4xl mx-auto px-4 pb-20">
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl text-center text-white px-6 py-16 shadow-xl">
-          <h2 className="text-3xl font-bold">Ready to build the future of Turkana?</h2>
-          <p className="mt-4 text-emerald-100">Join the community that is building, learning and growing together.</p>
-          <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
-            <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg transition">
-              Become a Member
-            </Link>
-            <Link to="/events" className="px-6 py-3 border border-white/40 rounded-lg hover:bg-white/10 transition">
-              Browse Upcoming Events
-            </Link>
+        <Reveal reduced={reduced}>
+          <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl text-center text-white px-6 py-16 shadow-xl">
+            <div className="tsc-float absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
+            <div className="tsc-float absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-teal-300/20 blur-2xl" style={{ animationDelay: '-4s' }} aria-hidden="true" />
+            <h2 className="relative text-3xl font-bold">Ready to build the future of Turkana?</h2>
+            <p className="relative mt-4 text-emerald-100">Join the community that is building, learning and growing together.</p>
+            <div className="relative mt-8 flex flex-col sm:flex-row justify-center gap-3">
+              <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                Become a Member
+              </Link>
+              <Link to="/events" className="px-6 py-3 border border-white/40 rounded-lg hover:bg-white/10 transition">
+                Browse Upcoming Events
+              </Link>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ── Footer ── */}
@@ -394,7 +819,7 @@ export default function Landing() {
             <div className="flex gap-3">
               {socials.map(([name, url, icon]) => (
                 <a key={name} href={url} target="_blank" rel="noreferrer noopener" title={name} aria-label={name}
-                  className="w-10 h-10 rounded-lg bg-gray-800 text-gray-300 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition">
+                  className="w-10 h-10 rounded-lg bg-gray-800 text-gray-300 flex items-center justify-center hover:bg-emerald-600 hover:text-white hover:-translate-y-1 transition-all duration-200">
                   <SocialIcon name={icon} className="w-5 h-5" />
                 </a>
               ))}
@@ -407,6 +832,17 @@ export default function Landing() {
           </p>
         </div>
       </footer>
+
+      {/* ── Back to top ── */}
+      <button
+        onClick={scrollTop}
+        aria-label="Back to top"
+        className={`fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-emerald-600 text-white shadow-lg flex items-center justify-center hover:bg-emerald-700 hover:-translate-y-1 transition-all duration-300 ${
+          showTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <Icon name="up" className="w-5 h-5" />
+      </button>
     </div>
   )
 }
