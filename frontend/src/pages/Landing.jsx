@@ -28,6 +28,15 @@ const ICON_PATHS = {
   menu: 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5',
   close: 'M6 18 18 6M6 6l12 12',
   up: 'M4.5 15.75l7.5-7.5 7.5 7.5',
+  check: 'm4.5 12.75 6 6 9-13.5',
+  target:
+    'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9ZM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z',
+  eye:
+    'M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+  heart:
+    'M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z',
+  shield:
+    'M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z',
 }
 
 function Icon({ name, className = 'w-6 h-6' }) {
@@ -86,6 +95,8 @@ function SocialIcon({ name, className = 'w-5 h-5' }) {
       return null
   }
 }
+
+/* ═══════════════════════════ Content ═══════════════════════════ */
 
 const pillars = [
   ['BUILD', 'Hackathons, build sessions, project teams, demo days.', 'code'],
@@ -167,6 +178,60 @@ const highlights = [
   ['Made in Turkana', 'For the county and beyond', 'globe'],
 ]
 
+// ── About / Mission / Vision / Values ──
+// Draft wording based on the rest of this page. Edit it to match the club's official statements.
+const ABOUT = {
+  eyebrow: 'About us',
+  title: "Where Turkana's ideas become ventures",
+  paragraphs: [
+    'Turkana Startup Club (TSC) is a community-driven platform that brings together students, developers, founders, mentors and volunteers across Turkana County to build, learn and grow together.',
+    'We run hackathons, workshops and founder meetups, and connect members with mentorship and incubation opportunities. This platform is where members meet, join events, earn verifiable certificates and find collaborators.',
+  ],
+  points: [
+    'Open to students, developers, founders, mentors and volunteers',
+    'Hackathons, workshops and founder meetups',
+    'Mentorship, incubation and grant opportunities',
+    'Verifiable digital certificates for your achievements',
+  ],
+}
+
+const MISSION =
+  "To empower Turkana's students, developers and entrepreneurs with the community, skills, mentorship and opportunities they need to turn ideas into sustainable ventures."
+
+const VISION =
+  'A thriving and inclusive startup ecosystem in Turkana County, where local innovators build solutions that create jobs and lasting impact, in Kenya and beyond.'
+
+// [title, description, icon]
+const VALUES = [
+  ['Collaboration', 'We build faster and go further when we work together.', 'users'],
+  ['Innovation', 'We back bold ideas and practical solutions to local problems.', 'bulb'],
+  ['Inclusion', 'Everyone with the drive to build is welcome, whatever their background.', 'heart'],
+  ['Integrity', 'We act honestly, share credit and keep our promises.', 'shield'],
+]
+
+// ── Images ──
+// Put real photos in  frontend/public/images/  using these file names.
+// If a file is missing, a matching illustration is shown instead, so the page never looks broken.
+const IMAGES = {
+  aboutMain: {
+    src: '/images/about-main.jpg',
+    alt: 'TSC members at a community meetup',
+    variant: 'community',
+  },
+  aboutSecondary: {
+    src: '/images/about-secondary.jpg',
+    alt: 'Developers collaborating at a hackathon',
+    variant: 'hackathon',
+  },
+}
+
+const GALLERY = [
+  { src: '/images/gallery-hackathon.jpg', alt: 'Participants at a TSC hackathon', caption: 'Hackathons', variant: 'hackathon' },
+  { src: '/images/gallery-workshop.jpg', alt: 'A TSC workshop in session', caption: 'Workshops', variant: 'workshop' },
+  { src: '/images/gallery-mentorship.jpg', alt: 'A mentor advising a founder', caption: 'Mentorship', variant: 'mentor' },
+  { src: '/images/gallery-community.jpg', alt: 'TSC community members together', caption: 'Community meetups', variant: 'community' },
+]
+
 // [name, url, icon key]
 // Replace these URLs with the club's real social media pages.
 const socials = [
@@ -178,6 +243,7 @@ const socials = [
 
 // Sections shown in the nav: [id, label]
 const NAV = [
+  ['about', 'About'],
   ['pillars', 'Pillars'],
   ['features', 'Features'],
   ['how', 'How It Works'],
@@ -283,6 +349,118 @@ function Reveal({ children, delay = 0, className = '', reduced }) {
       } ${className}`}
     >
       {children}
+    </div>
+  )
+}
+
+// Simple on-brand illustrations, shown when a photo file is not available yet
+function Illustration({ variant, label }) {
+  let scene
+  switch (variant) {
+    case 'hackathon':
+      scene = (
+        <>
+          <circle cx="70" cy="70" r="40" fill="#a7f3d0" opacity="0.7" />
+          <circle cx="340" cy="240" r="46" fill="#99f6e4" opacity="0.7" />
+          <rect x="105" y="80" width="190" height="125" rx="12" fill="#064e3b" />
+          <rect x="116" y="91" width="168" height="103" rx="6" fill="#ecfdf5" />
+          <rect x="128" y="104" width="60" height="8" rx="4" fill="#059669" />
+          <rect x="128" y="120" width="110" height="8" rx="4" fill="#34d399" />
+          <rect x="140" y="136" width="80" height="8" rx="4" fill="#0d9488" />
+          <rect x="140" y="152" width="100" height="8" rx="4" fill="#34d399" />
+          <rect x="128" y="168" width="50" height="8" rx="4" fill="#059669" />
+          <path d="M80 214 H320 L304 236 H96 Z" fill="#047857" />
+          <circle cx="330" cy="82" r="20" fill="#fbbf24" />
+          <rect x="322" y="102" width="16" height="9" rx="3" fill="#f59e0b" />
+          <path d="M330 48 v8 M362 82 h8 M298 82 h-8 M352 60 l6-6 M308 60 l-6-6" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+        </>
+      )
+      break
+    case 'workshop':
+      scene = (
+        <>
+          <circle cx="340" cy="60" r="36" fill="#a7f3d0" opacity="0.7" />
+          <circle cx="50" cy="250" r="42" fill="#99f6e4" opacity="0.7" />
+          <rect x="60" y="50" width="250" height="160" rx="12" fill="#ffffff" stroke="#047857" strokeWidth="4" />
+          <rect x="96" y="150" width="28" height="36" rx="4" fill="#6ee7b7" />
+          <rect x="138" y="130" width="28" height="56" rx="4" fill="#34d399" />
+          <rect x="180" y="140" width="28" height="46" rx="4" fill="#10b981" />
+          <rect x="222" y="104" width="28" height="82" rx="4" fill="#059669" />
+          <rect x="264" y="80" width="28" height="106" rx="4" fill="#047857" />
+          <path d="M110 140 L152 120 L194 130 L236 92 L278 70" fill="none" stroke="#0f766e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="350" cy="160" r="18" fill="#0d9488" />
+          <path d="M322 232 C322 170 378 170 378 232 Z" fill="#0d9488" />
+          <rect x="40" y="232" width="330" height="6" rx="3" fill="#047857" opacity="0.25" />
+        </>
+      )
+      break
+    case 'mentor':
+      scene = (
+        <>
+          <circle cx="60" cy="60" r="36" fill="#a7f3d0" opacity="0.7" />
+          <circle cx="350" cy="250" r="44" fill="#99f6e4" opacity="0.7" />
+          <circle cx="125" cy="140" r="30" fill="#059669" />
+          <path d="M65 250 C65 180 185 180 185 250 Z" fill="#059669" />
+          <circle cx="285" cy="150" r="24" fill="#34d399" />
+          <path d="M237 250 C237 190 333 190 333 250 Z" fill="#34d399" />
+          <rect x="150" y="40" width="120" height="50" rx="16" fill="#ffffff" stroke="#047857" strokeWidth="3" />
+          <path d="M170 90 l-4 18 l22 -18 Z" fill="#ffffff" stroke="#047857" strokeWidth="3" strokeLinejoin="round" />
+          <rect x="168" y="56" width="70" height="7" rx="3.5" fill="#34d399" />
+          <rect x="168" y="70" width="46" height="7" rx="3.5" fill="#a7f3d0" />
+          <rect x="40" y="250" width="320" height="6" rx="3" fill="#047857" opacity="0.25" />
+        </>
+      )
+      break
+    default: // community
+      scene = (
+        <>
+          <circle cx="330" cy="60" r="34" fill="#a7f3d0" opacity="0.7" />
+          <circle cx="60" cy="250" r="44" fill="#99f6e4" opacity="0.7" />
+          <path d="M120 88 Q160 48 200 78 Q240 48 280 88" fill="none" stroke="#047857" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 9" />
+          <circle cx="120" cy="125" r="26" fill="#34d399" />
+          <path d="M72 238 C72 178 168 178 168 238 Z" fill="#34d399" />
+          <circle cx="280" cy="125" r="26" fill="#0d9488" />
+          <path d="M232 238 C232 178 328 178 328 238 Z" fill="#0d9488" />
+          <circle cx="200" cy="108" r="32" fill="#059669" />
+          <path d="M146 250 C146 180 254 180 254 250 Z" fill="#059669" />
+          <rect x="40" y="250" width="320" height="6" rx="3" fill="#047857" opacity="0.25" />
+        </>
+      )
+  }
+
+  return (
+    <svg
+      viewBox="0 0 400 300"
+      preserveAspectRatio="xMidYMid slice"
+      role="img"
+      aria-label={label}
+      className="absolute inset-0 h-full w-full"
+    >
+      {scene}
+    </svg>
+  )
+}
+
+// Shows a photo from /public/images, or an illustration if the file is missing.
+// The caller supplies positioning (relative / absolute), size and rounding via className.
+function ImageSlot({ src, alt, variant, className = '' }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <div className={`overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-100 ${className}`}>
+      <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105 motion-reduce:transform-none">
+        {failed ? (
+          <Illustration variant={variant} label={alt} />
+        ) : (
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+            className="h-full w-full object-cover"
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -678,6 +856,100 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── About ── */}
+      <section id="about" className="max-w-6xl mx-auto px-4 py-20 scroll-mt-20">
+        <div className="grid lg:grid-cols-2 gap-14 items-center">
+          <Reveal reduced={reduced}>
+            <p className="text-sm font-semibold tracking-wide text-emerald-600 uppercase">{ABOUT.eyebrow}</p>
+            <h2 className="mt-2 text-3xl md:text-4xl font-bold leading-tight">{ABOUT.title}</h2>
+            {ABOUT.paragraphs.map((p) => (
+              <p key={p} className="mt-4 text-gray-600 leading-relaxed">{p}</p>
+            ))}
+            <ul className="mt-6 space-y-3">
+              {ABOUT.points.map((pt) => (
+                <li key={pt} className="flex items-start gap-3 text-sm text-gray-700">
+                  <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                  </span>
+                  {pt}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <Link to="/register" className="px-6 py-3 bg-emerald-600 text-white text-center font-semibold rounded-lg shadow-sm hover:bg-emerald-700 transition-colors">
+                Become a Member
+              </Link>
+              <a href="#mission" onClick={(e) => goTo(e, 'mission')}
+                className="px-6 py-3 border border-gray-300 text-center rounded-lg text-gray-700 hover:border-emerald-400 hover:text-emerald-700 transition-colors">
+                Our mission &amp; vision
+              </a>
+            </div>
+          </Reveal>
+
+          <Reveal delay={150} reduced={reduced}>
+            <div className="relative pb-8 pl-2 sm:pl-0">
+              <div aria-hidden="true" className="absolute -top-4 -right-4 h-2/3 w-2/3 rounded-3xl bg-emerald-100" />
+              <ImageSlot {...IMAGES.aboutMain} className="group relative aspect-[4/3] rounded-3xl shadow-xl" />
+              <ImageSlot
+                {...IMAGES.aboutSecondary}
+                className="group absolute bottom-0 left-0 sm:-left-6 w-36 sm:w-48 aspect-square rounded-2xl border-4 border-white shadow-xl"
+              />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Mission, Vision & Values ── */}
+      <section id="mission" className="bg-gray-50 border-y scroll-mt-20">
+        <div className="max-w-6xl mx-auto px-4 py-20">
+          <Reveal reduced={reduced} className="text-center mb-12">
+            <h2 className="text-3xl font-bold">Our Mission &amp; Vision</h2>
+            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Why Turkana Startup Club exists, and where we are headed.</p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Reveal reduced={reduced} className="h-full">
+              <div className="relative h-full overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 p-8 md:p-10 text-white shadow-lg">
+                <div aria-hidden="true" className="tsc-float absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                <span className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                  <Icon name="target" className="h-6 w-6" />
+                </span>
+                <h3 className="relative mt-5 text-2xl font-bold">Our Mission</h3>
+                <p className="relative mt-3 leading-relaxed text-emerald-50">{MISSION}</p>
+              </div>
+            </Reveal>
+
+            <Reveal reduced={reduced} delay={120} className="h-full">
+              <div className="relative h-full overflow-hidden rounded-3xl border border-emerald-100 bg-white p-8 md:p-10 shadow-lg">
+                <div aria-hidden="true" className="absolute -bottom-12 -right-12 h-44 w-44 rounded-full bg-emerald-50" />
+                <span className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Icon name="eye" className="h-6 w-6" />
+                </span>
+                <h3 className="relative mt-5 text-2xl font-bold text-gray-900">Our Vision</h3>
+                <p className="relative mt-3 leading-relaxed text-gray-600">{VISION}</p>
+              </div>
+            </Reveal>
+          </div>
+
+          <Reveal reduced={reduced} className="mt-14 mb-6 text-center">
+            <h3 className="text-xl font-bold">What we stand for</h3>
+          </Reveal>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {VALUES.map(([title, desc, icon], i) => (
+              <Reveal key={title} delay={i * 100} reduced={reduced} className="h-full">
+                <div className="group h-full rounded-2xl border bg-white p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white">
+                    <Icon name={icon} className="h-6 w-6" />
+                  </span>
+                  <h4 className="mt-4 font-bold text-gray-900">{title}</h4>
+                  <p className="mt-2 text-sm text-gray-600">{desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Five Pillars ── */}
       <section id="pillars" className="max-w-6xl mx-auto px-4 py-20 scroll-mt-20">
         <Reveal reduced={reduced} className="text-center mb-12">
@@ -748,6 +1020,33 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Life at TSC (photo gallery) ── */}
+      <section id="gallery" className="bg-gray-50 border-y scroll-mt-20">
+        <div className="max-w-6xl mx-auto px-4 py-20">
+          <Reveal reduced={reduced} className="text-center mb-12">
+            <h2 className="text-3xl font-bold">Life at TSC</h2>
+            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Hackathons, workshops, mentorship and community meetups: a look at what we do together.</p>
+          </Reveal>
+          <div className="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-4 md:h-[30rem]">
+            {GALLERY.map((g, i) => (
+              <Reveal
+                key={g.caption}
+                delay={i * 90}
+                reduced={reduced}
+                className={`h-full ${i === 0 ? 'col-span-2 md:row-span-2' : ''}`}
+              >
+                <figure className={`group relative overflow-hidden rounded-2xl shadow-sm md:h-full ${i === 0 ? 'h-56' : 'h-44'}`}>
+                  <ImageSlot src={g.src} alt={g.alt} variant={g.variant} className="absolute inset-0" />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 pt-10">
+                    <figcaption className="font-semibold text-white">{g.caption}</figcaption>
+                  </div>
+                </figure>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Testimonials ── */}
       <section className="bg-emerald-700 text-white">
         <div className="max-w-6xl mx-auto px-4 py-20">
@@ -808,6 +1107,7 @@ export default function Landing() {
           <div>
             <h4 className="text-white font-semibold mb-3">Quick Links</h4>
             <ul className="space-y-2 text-sm">
+              <li><a href="#about" onClick={(e) => goTo(e, 'about')} className="hover:text-white">About us</a></li>
               <li><Link to="/events" className="hover:text-white">Events</Link></li>
               <li><Link to="/register" className="hover:text-white">Join TSC</Link></li>
               <li><Link to="/login" className="hover:text-white">Member Login</Link></li>
