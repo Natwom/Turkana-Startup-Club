@@ -210,7 +210,8 @@ const VALUES = [
 ]
 
 // ── Images ──
-// Put real photos in  frontend/public/images/  using these file names.
+// Real photos live in  frontend/public/images/  using these file names
+// (about-main.jpg, about-secondary.jpg, gallery-*.jpg — all bundled with the project).
 // If a file is missing, a matching illustration is shown instead, so the page never looks broken.
 const IMAGES = {
   aboutMain: {
@@ -452,6 +453,7 @@ function ImageSlot({ src, alt, variant, className = '' }) {
           <Illustration variant={variant} label={alt} />
         ) : (
           <img
+            key={src}
             src={src}
             alt={alt}
             loading="lazy"
