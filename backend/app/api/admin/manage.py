@@ -16,6 +16,8 @@ from app.services.notifications import notify
 router = APIRouter(prefix="/api/admin", tags=["admin-manage"])
 public_router = APIRouter(prefix="/api/certificates", tags=["certificates"])
 
+HACKATHON_MODES = ["online", "in_person", "hybrid"]
+
 
 # ---------------------------------------------------------------- helpers
 def _clean(payload: dict) -> dict:
@@ -47,6 +49,21 @@ def _user_by_email(db: Session, email: str):
     return u
 
 
+def _check_hackathon(values: dict) -> None:
+    """Extra validation for hackathons: online/hybrid need a link, end must follow start."""
+    mode = values.get("mode", "in_person")
+    url = values.get("meeting_url", "")
+    if mode in ("online", "hybrid"):
+        if not url:
+            raise HTTPException(422, "A meeting link is required for online and hybrid hackathons")
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            raise HTTPException(422, "The meeting link must start with http:// or https://")
+    elif url and not re.match(r"^https?://", url, re.IGNORECASE):
+        raise HTTPException(422, "The meeting link must start with http:// or https://")
+    if "starts_at" in values and "ends_at" in values and values["ends_at"] <= values["starts_at"]:
+        raise HTTPException(422, "'ends_at' must be after 'starts_at'")
+
+
 # ------------------------------------------------- generic CREATE endpoints
 # path (POST /api/admin/<path>) -> spec
 CREATE_SPECS = {
@@ -56,8 +73,12 @@ CREATE_SPECS = {
     "hackathons": dict(
         model="Hackathon", perm="hackathons.manage", label="Hackathon", audit="hackathon.create",
         required=["name", "starts_at"],
-        fields=["name", "description", "venue", "rules", "schedule", "starts_at", "ends_at"],
-        dates=["starts_at", "ends_at"]),
+        fields=["name", "description", "mode", "venue", "meeting_url", "rules", "schedule",
+                "starts_at", "ends_at"],
+        dates=["starts_at", "ends_at"],
+        choices={"mode": HACKATHON_MODES},
+        defaults={"mode": "in_person"},
+        check=_check_hackathon),
     "hackathons/challenges": dict(
         model="HackathonTrack", perm="hackathons.manage", label="Challenge", audit="hackathon.track",
         required=["hackathon_id", "name"], fields=["hackathon_id", "name", "description"],
@@ -120,6 +141,11 @@ def _create_endpoint(spec: dict):
                     values[f] = int(values[f])
                 except (TypeError, ValueError):
                     raise HTTPException(422, f"'{f}' must be a number")
+        for f, allowed in spec.get("choices", {}).items():
+            if f in values and values[f] not in allowed:
+                raise HTTPException(422, f"'{f}' must be one of: {', '.join(allowed)}")
+        if spec.get("check"):
+            spec["check"](values)
         if spec.get("parent"):
             field, parent_model = spec["parent"]
             if not db.get(getattr(M, parent_model), values.get(field)):

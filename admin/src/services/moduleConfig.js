@@ -29,7 +29,15 @@ addForm(['hackathons/all-hackathons'], {
   title: 'Add Hackathon', button: 'Add hackathon', endpoint: '/admin/hackathons',
   fields: [
     { name: 'name', label: 'Name', required: true, wide: true, placeholder: 'e.g. TSC Hackathon 2026' },
-    { name: 'venue', label: 'Venue', placeholder: 'e.g. Lodwar Youth Centre' },
+    { name: 'mode', label: 'Format', type: 'select', required: true, default: 'in_person',
+      options: [
+        { value: 'in_person', label: 'In person' },
+        { value: 'online', label: 'Online' },
+        { value: 'hybrid', label: 'Hybrid (in person + online)' },
+      ] },
+    { name: 'venue', label: 'Venue (in person / hybrid)', placeholder: 'e.g. Lodwar Youth Centre' },
+    { name: 'meeting_url', label: 'Meeting link (online / hybrid)', wide: true,
+      placeholder: 'https://meet.google.com/… or Zoom / Discord invite' },
     { name: 'starts_at', label: 'Starts at', type: 'datetime-local', required: true },
     { name: 'ends_at', label: 'Ends at', type: 'datetime-local' },
     { name: 'description', label: 'Description', type: 'textarea', wide: true },

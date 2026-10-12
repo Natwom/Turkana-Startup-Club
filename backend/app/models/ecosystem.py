@@ -13,7 +13,10 @@ class Hackathon(Base):
     description = Column(Text, default="")
     starts_at = Column(DateTime, nullable=False)
     ends_at = Column(DateTime, nullable=True)
+    mode = Column(String(20), nullable=False, default="in_person",
+                  server_default="in_person")  # online|in_person|hybrid
     venue = Column(String(200), default="")
+    meeting_url = Column(String(500), nullable=True)  # online/hybrid: Zoom, Meet, Discord...
     status = Column(String(20), default="upcoming")  # upcoming|live|judging|completed|archived
     rules = Column(Text, default="")
     schedule = Column(Text, default="")

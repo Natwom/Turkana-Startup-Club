@@ -10,6 +10,12 @@ const ICONS = {
     'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
     'M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z',
   ],
+  globe: [
+    'M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418',
+  ],
+  video: [
+    'm15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z',
+  ],
   search: ['m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z'],
   check: ['m4.5 12.75 6 6 9-13.5'],
   x: ['M6 18 18 6M6 6l12 12'],
@@ -53,6 +59,17 @@ const BADGE = {
 
 const STATUS_ORDER = { live: 0, upcoming: 1, judging: 2, completed: 3 }
 
+const MODE_LABEL = { online: 'Online', in_person: 'In person', hybrid: 'Hybrid' }
+const MODE_BADGE = {
+  online: 'bg-violet-50 text-violet-700 ring-violet-200',
+  in_person: 'bg-gray-100 text-gray-600 ring-gray-200',
+  hybrid: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+}
+
+const userTimeZone = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return '' }
+})()
+
 const fmt = (d) =>
   d ? new Date(d).toLocaleString(undefined, {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -68,6 +85,8 @@ const msg = (err, fallback) => {
   const d = err?.response?.data?.detail
   return typeof d === 'string' ? d : fallback
 }
+
+const modeOf = (h) => h?.mode || 'in_person'
 
 const SKELETONS = Array.from({ length: 3 })
 
@@ -114,6 +133,41 @@ function AvatarStack({ count }) {
   )
 }
 
+function ModeBadge({ mode }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset ${MODE_BADGE[mode] ?? MODE_BADGE.in_person}`}>
+      {mode !== 'in_person' && <Icon name="globe" className="w-3 h-3" />}
+      {MODE_LABEL[mode] ?? mode}
+    </span>
+  )
+}
+
+function Where({ h, className = '' }) {
+  const mode = modeOf(h)
+  if (mode === 'online') {
+    return (
+      <p className={`text-sm text-gray-500 flex items-center gap-2 ${className}`}>
+        <Icon name="globe" className="w-4 h-4 text-gray-400 shrink-0" />
+        <span>Online — join from anywhere</span>
+      </p>
+    )
+  }
+  if (!h.venue) {
+    return mode === 'hybrid' ? (
+      <p className={`text-sm text-gray-500 flex items-center gap-2 ${className}`}>
+        <Icon name="globe" className="w-4 h-4 text-gray-400 shrink-0" />
+        <span>In person + online</span>
+      </p>
+    ) : null
+  }
+  return (
+    <p className={`text-sm text-gray-500 flex items-center gap-2 ${className}`}>
+      <Icon name="pin" className="w-4 h-4 text-gray-400 shrink-0" />
+      <span className="truncate">{h.venue}{mode === 'hybrid' ? ' · also online' : ''}</span>
+    </p>
+  )
+}
+
 export default function Hackathons() {
   const [items, setItems] = useState([])
   const [joined, setJoined] = useState([])
@@ -124,6 +178,7 @@ export default function Hackathons() {
   const [busy, setBusy] = useState(false)
 
   const [statusFilter, setStatusFilter] = useState('all')
+  const [modeFilter, setModeFilter] = useState('all')
   const [mineOnly, setMineOnly] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -168,7 +223,7 @@ export default function Hackathons() {
       setNotice(r.data.message)
       setTimeout(() => setNotice(''), 5000)
       await load()
-      if (detail?.id === id) open(id) // keep modal in sync
+      if (detail?.id === id) open(id) // keep modal in sync (also reveals/hides the meeting link)
     } catch (err) {
       setError(msg(err, 'Something went wrong'))
     } finally {
@@ -180,6 +235,7 @@ export default function Hackathons() {
     const needle = query.trim().toLowerCase()
     return items
       .filter((h) => statusFilter === 'all' || h.status === statusFilter)
+      .filter((h) => modeFilter === 'all' || modeOf(h) === modeFilter)
       .filter((h) => !mineOnly || joined.includes(h.id))
       .filter((h) => !needle
         || (h.name || '').toLowerCase().includes(needle)
@@ -188,7 +244,7 @@ export default function Hackathons() {
       .sort((a, b) =>
         (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
         || new Date(a.starts_at) - new Date(b.starts_at))
-  }, [items, joined, statusFilter, mineOnly, query])
+  }, [items, joined, statusFilter, modeFilter, mineOnly, query])
 
   const counts = useMemo(() => {
     const c = { all: items.length, mine: joined.length }
@@ -200,6 +256,9 @@ export default function Hackathons() {
     live: items.filter((h) => joined.includes(h.id) && h.status === 'live').length,
     upcoming: items.filter((h) => joined.includes(h.id) && h.status === 'upcoming').length,
   }), [items, joined])
+
+  const anyFilter = query || statusFilter !== 'all' || modeFilter !== 'all' || mineOnly
+  const clearAll = () => { setQuery(''); setStatusFilter('all'); setModeFilter('all'); setMineOnly(false) }
 
   const JoinButton = ({ h }) => {
     if (joined.includes(h.id))
@@ -220,7 +279,7 @@ export default function Hackathons() {
     return <span className="text-sm text-gray-400">Registration closed</span>
   }
 
-  const emptyIcon = mineOnly ? 'ticket' : query || statusFilter !== 'all' ? 'search' : 'flag'
+  const emptyIcon = mineOnly ? 'ticket' : anyFilter ? 'search' : 'flag'
 
   return (
     <div className="max-w-6xl mx-auto pb-16">
@@ -274,6 +333,14 @@ export default function Hackathons() {
             </button>
           )}
         </div>
+        <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}
+          aria-label="Format"
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="all">All formats</option>
+          <option value="online">Online</option>
+          <option value="in_person">In person</option>
+          <option value="hybrid">Hybrid</option>
+        </select>
         <button onClick={() => setMineOnly((v) => !v)}
           className={`px-3 py-2 text-sm rounded-lg border transition-colors
             ${mineOnly
@@ -323,12 +390,12 @@ export default function Hackathons() {
           <p className="text-gray-500 text-sm">
             {mineOnly
               ? "You haven't joined any hackathons yet."
-              : query || statusFilter !== 'all'
+              : anyFilter
                 ? 'No hackathons match your filters.'
                 : 'No hackathons yet. Check back soon!'}
           </p>
-          {(query || statusFilter !== 'all' || mineOnly) && (
-            <button onClick={() => { setQuery(''); setStatusFilter('all'); setMineOnly(false) }}
+          {anyFilter && (
+            <button onClick={clearAll}
               className="mt-3 text-sm text-emerald-700 font-medium hover:underline">
               Clear filters
             </button>
@@ -344,10 +411,13 @@ export default function Hackathons() {
               className={`bg-white border rounded-2xl p-5 flex flex-col shadow-sm hover:shadow-md transition-shadow
                 ${joined.includes(h.id) ? 'border-emerald-300' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-inset capitalize ${BADGE[h.status] ?? BADGE.completed}`}>
-                  {h.status === 'live' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />}
-                  {h.status}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-inset capitalize ${BADGE[h.status] ?? BADGE.completed}`}>
+                    {h.status === 'live' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />}
+                    {h.status}
+                  </span>
+                  <ModeBadge mode={modeOf(h)} />
+                </div>
                 {joined.includes(h.id) && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
                     <Icon name="check" className="w-3.5 h-3.5" />
@@ -361,12 +431,7 @@ export default function Hackathons() {
                 <Icon name="calendar" className="w-4 h-4 text-gray-400 shrink-0" />
                 {fmtDate(h.starts_at)} · {fmtTime(h.starts_at)}
               </p>
-              {h.venue && (
-                <p className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
-                  <Icon name="pin" className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate">{h.venue}</span>
-                </p>
-              )}
+              <Where h={h} className="mt-0.5" />
 
               {h.status === 'upcoming' && <div className="mt-2"><Countdown target={h.starts_at} /></div>}
 
@@ -400,9 +465,12 @@ export default function Hackathons() {
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-inset capitalize ${BADGE[detail.status] ?? BADGE.completed}`}>
-                  {detail.status}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-inset capitalize ${BADGE[detail.status] ?? BADGE.completed}`}>
+                    {detail.status}
+                  </span>
+                  <ModeBadge mode={modeOf(detail)} />
+                </div>
                 <h2 className="text-xl font-bold mt-2 text-gray-900">{detail.name}</h2>
               </div>
               <button onClick={() => setDetail(null)} aria-label="Close"
@@ -424,11 +492,32 @@ export default function Hackathons() {
               )}
               {detail.status === 'upcoming' && <Countdown target={detail.starts_at} />}
             </div>
-            {detail.venue && (
-              <p className="text-sm text-gray-600 mt-1 flex items-center gap-2">
-                <Icon name="pin" className="w-4 h-4 text-gray-400 shrink-0" />
-                {detail.venue}
-              </p>
+            {modeOf(detail) !== 'in_person' && userTimeZone && (
+              <p className="text-xs text-gray-400 mt-1">Times are shown in your time zone ({userTimeZone}).</p>
+            )}
+            <Where h={detail} className="mt-1" />
+
+            {/* Online access */}
+            {modeOf(detail) !== 'in_person' && detail.has_meeting_link && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+                <p className="text-sm font-semibold text-violet-900 flex items-center gap-2">
+                  <Icon name="video" className="w-4 h-4" />
+                  Online access
+                </p>
+                {detail.meeting_url ? (
+                  <a href={detail.meeting_url} target="_blank" rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors">
+                    Join online
+                    <Icon name="arrowRight" className="w-4 h-4" />
+                  </a>
+                ) : (
+                  <p className="mt-1 text-sm text-violet-800">
+                    {joined.includes(detail.id)
+                      ? 'The meeting link will appear here once the hackathon is open.'
+                      : 'Join this hackathon to see the online meeting link.'}
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">

@@ -303,7 +303,10 @@ function ActionForm({ config, onSaved, onCancel }) {
 
     if (f.type === 'select') {
       const loadingOptions = f.optionsFrom && opts[f.name] === undefined
-      const list = f.optionsFrom ? (opts[f.name] ?? []) : f.options.map((o) => ({ value: o, label: o }))
+      // options can be plain strings or { value, label } objects
+      const list = f.optionsFrom
+        ? (opts[f.name] ?? [])
+        : f.options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
       return (
         <>
           <select {...common} onChange={(e) => set(e.target.value)} disabled={loadingOptions}>
