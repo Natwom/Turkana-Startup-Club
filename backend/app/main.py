@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.base import Base
@@ -68,6 +69,33 @@ DEFAULT_ROLES = {
 }
 
 
+def ensure_columns():
+    """Dev-mode safety net: add model columns that are missing from existing tables.
+
+    Base.metadata.create_all() creates new tables but never adds columns to a table
+    that already exists, so an old tsc.db breaks when a model gains a column.
+    """
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'
+                if col.server_default is not None:
+                    default = getattr(col.server_default.arg, "text", col.server_default.arg)
+                    if isinstance(default, str):
+                        default = "'" + default.replace("'", "''") + "'"
+                    ddl += f" DEFAULT {default}"
+                    if not col.nullable:
+                        ddl += " NOT NULL"
+                conn.execute(text(ddl))
+                print(f"[ensure_columns] added {table.name}.{col.name}")
+
+
 def seed():
     db = SessionLocal()
     try:
@@ -108,6 +136,7 @@ def seed():
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)   # dev mode; use Alembic in production
+    ensure_columns()                        # patch old tables that miss new columns
     seed()
 
 
