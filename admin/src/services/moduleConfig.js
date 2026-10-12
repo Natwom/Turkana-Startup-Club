@@ -55,6 +55,54 @@ addForm(['hackathons/challenges'], {
   ],
 })
 
+addForm(['hackathons/questions'], {
+  title: 'Add Registration Question', button: 'Add question', endpoint: '/admin/hackathons/questions',
+  fields: [
+    hackathon,
+    { name: 'question', label: 'Question', required: true, wide: true, type: 'textarea',
+      placeholder: 'e.g. What is your experience level, and what do you hope to build?' },
+    { name: 'required', label: 'Answer required?', type: 'select', required: true, default: '1',
+      options: [
+        { value: '1', label: 'Yes — required' },
+        { value: '0', label: 'No — optional' },
+      ] },
+    { name: 'position', label: 'Order (0 = first)', type: 'number', default: 0 },
+  ],
+})
+
+addForm(['hackathons/tasks'], {
+  title: 'Add Task', button: 'Add task', endpoint: '/admin/hackathons/tasks',
+  fields: [
+    hackathon,
+    { name: 'title', label: 'Task title', required: true, wide: true,
+      placeholder: 'e.g. Build a landing page for your idea' },
+    { name: 'instructions', label: 'Instructions', type: 'textarea', wide: true },
+    { name: 'opens_at', label: 'Opens at', type: 'datetime-local', utc: true },
+    { name: 'closes_at', label: 'Closes at (deadline)', type: 'datetime-local', utc: true },
+    { name: 'submission_type', label: 'Participants submit', type: 'select', required: true,
+      default: 'either',
+      options: [
+        { value: 'either', label: 'A link or written answer' },
+        { value: 'link', label: 'A link only' },
+        { value: 'text', label: 'A written answer only' },
+      ] },
+    { name: 'points', label: 'Points', type: 'number', default: 10 },
+    { name: 'position', label: 'Order (0 = first)', type: 'number', default: 0 },
+  ],
+})
+
+addForm(['hackathons/submissions'], {
+  title: 'Score Submission', button: 'Score a submission',
+  endpoint: '/admin/hackathons/submissions/review',
+  fields: [
+    { name: 'submission_id', label: 'Submission', type: 'select', required: true, wide: true,
+      optionsFrom: '/admin/hackathons/submissions', labelKey: 'label', valueKey: 'id',
+      emptyHint: 'No submissions yet.' },
+    { name: 'score', label: 'Score', type: 'number', required: true },
+    { name: 'feedback', label: 'Feedback for the participant', type: 'textarea', wide: true },
+  ],
+})
+
 addForm(['hackathons/judges'], {
   title: 'Add Judge', button: 'Add judge', endpoint: '/admin/hackathons/judges',
   fields: [hackathon, { ...member, label: 'Judge' }],

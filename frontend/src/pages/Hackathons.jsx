@@ -66,6 +66,12 @@ const MODE_BADGE = {
   hybrid: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
 }
 
+const TASK_STATE = {
+  open: ['Open', 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+  upcoming: ['Not open yet', 'bg-sky-50 text-sky-700 ring-sky-200'],
+  closed: ['Closed', 'bg-gray-100 text-gray-600 ring-gray-200'],
+}
+
 const userTimeZone = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return '' }
 })()
@@ -168,6 +174,129 @@ function Where({ h, className = '' }) {
   )
 }
 
+/* ── One task: instructions, deadline, submission form, score ── */
+function TaskCard({ hackathonId, task, onSaved }) {
+  const sub = task.submission
+  const [editing, setEditing] = useState(false)
+  const [link, setLink] = useState(sub?.link || '')
+  const [text, setText] = useState(sub?.text || '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const [stateLabel, stateCls] = TASK_STATE[task.state] ?? TASK_STATE.closed
+  const needsLink = task.submission_type !== 'text'
+  const needsText = task.submission_type !== 'link'
+  const reviewed = Boolean(sub?.reviewed)
+  const canSubmit = task.state === 'open' && !reviewed
+  const showForm = canSubmit && (!sub || editing)
+
+  const save = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    setErr('')
+    try {
+      const r = await api.post(`/hackathons/${hackathonId}/tasks/${task.id}/submit`, { link, text })
+      setEditing(false)
+      onSaved(r.data?.message || 'Submission saved')
+    } catch (ex) {
+      setErr(msg(ex, 'Could not save your submission'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 bg-slate-50/50">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-gray-900">{task.title}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{task.points} points</p>
+        </div>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset whitespace-nowrap ${stateCls}`}>
+          {stateLabel}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
+        {task.opens_at && <span>Opens {fmt(task.opens_at)}</span>}
+        {task.closes_at && <span>· Closes {fmt(task.closes_at)}</span>}
+        {task.state === 'open' && task.closes_at && <Countdown target={task.closes_at} prefix="Closes in" />}
+        {task.state === 'upcoming' && task.opens_at && <Countdown target={task.opens_at} prefix="Opens in" />}
+      </div>
+
+      {task.instructions && (
+        <p className="text-sm text-gray-700 mt-3 whitespace-pre-line leading-relaxed">{task.instructions}</p>
+      )}
+      {task.state === 'upcoming' && (
+        <p className="text-sm text-gray-500 mt-3">Instructions will appear when this task opens.</p>
+      )}
+
+      {sub && !showForm && (
+        <div className="mt-3 rounded-lg bg-white border border-gray-200 p-3 text-sm">
+          <p className="text-xs font-semibold text-gray-500">Your submission</p>
+          {sub.link && (
+            <a href={sub.link} target="_blank" rel="noopener noreferrer"
+              className="block break-all text-emerald-700 hover:underline mt-1">{sub.link}</a>
+          )}
+          {sub.text && <p className="text-gray-700 whitespace-pre-line mt-1">{sub.text}</p>}
+          {reviewed ? (
+            <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2">
+              <p className="text-emerald-800 font-semibold">Score: {sub.score}/{task.points}</p>
+              {sub.feedback && <p className="text-emerald-800 mt-0.5 whitespace-pre-line">{sub.feedback}</p>}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mt-2">Submitted — waiting for review.</p>
+          )}
+          {canSubmit && (
+            <button onClick={() => setEditing(true)}
+              className="mt-2 text-sm text-emerald-700 font-medium hover:underline">
+              Edit submission
+            </button>
+          )}
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={save} className="mt-3 space-y-3">
+          {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
+          {needsLink && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Link (GitHub, demo, Drive…)
+              </label>
+              <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+          )}
+          {needsText && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Your answer</label>
+              <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button type="submit" disabled={busy}
+              className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+              {busy ? 'Saving…' : sub ? 'Update submission' : 'Submit'}
+            </button>
+            {editing && (
+              <button type="button" onClick={() => { setEditing(false); setErr('') }}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+
+      {task.state === 'closed' && !sub && (
+        <p className="text-sm text-gray-500 mt-3">This task is closed and no submission was made.</p>
+      )}
+    </div>
+  )
+}
+
 export default function Hackathons() {
   const [items, setItems] = useState([])
   const [joined, setJoined] = useState([])
@@ -181,6 +310,22 @@ export default function Hackathons() {
   const [modeFilter, setModeFilter] = useState('all')
   const [mineOnly, setMineOnly] = useState(false)
   const [query, setQuery] = useState('')
+
+  // join flow (registration questions)
+  const [joinFor, setJoinFor] = useState(null)
+  const [joinAnswers, setJoinAnswers] = useState({})
+  const [joinErr, setJoinErr] = useState('')
+  const [joining, setJoining] = useState(false)
+
+  // tasks for the open hackathon
+  const [tasks, setTasks] = useState(null)
+
+  const detailId = detail?.id
+
+  const flash = (text) => {
+    setNotice(text)
+    setTimeout(() => setNotice(''), 5000)
+  }
 
   const load = useCallback(async () => {
     try {
@@ -201,10 +346,30 @@ export default function Hackathons() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') setDetail(null) }
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setJoinFor(null)
+        setDetail(null)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const loadTasks = useCallback(async (id) => {
+    try {
+      const r = await api.get(`/hackathons/${id}/tasks`)
+      setTasks(Array.isArray(r.data) ? r.data : [])
+    } catch {
+      setTasks([])
+    }
+  }, [])
+
+  // tasks are only for members who joined the hackathon that is open in the modal
+  useEffect(() => {
+    if (detailId && joined.includes(detailId)) loadTasks(detailId)
+    else setTasks(null)
+  }, [detailId, joined, loadTasks])
 
   const open = async (id) => {
     try {
@@ -220,14 +385,57 @@ export default function Hackathons() {
     setError('')
     try {
       const r = await api.post(`/hackathons/${id}/${action}`)
-      setNotice(r.data.message)
-      setTimeout(() => setNotice(''), 5000)
+      flash(r.data.message)
       await load()
       if (detail?.id === id) open(id) // keep modal in sync (also reveals/hides the meeting link)
     } catch (err) {
       setError(msg(err, 'Something went wrong'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Joining: ask the registration questions first (if the hackathon has any)
+  const startJoin = async (h) => {
+    setBusy(true)
+    setError('')
+    try {
+      const r = await api.get(`/hackathons/${h.id}`)
+      const qs = r.data.questions || []
+      if (qs.length === 0) {
+        await act(h.id, 'join')
+        return
+      }
+      setJoinAnswers({})
+      setJoinErr('')
+      setJoinFor(r.data)
+    } catch (err) {
+      setError(msg(err, 'Could not open hackathon'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitJoin = async (e) => {
+    e.preventDefault()
+    const missing = joinFor.questions.filter((q) => q.required && !(joinAnswers[q.id] || '').trim())
+    if (missing.length) {
+      setJoinErr('Please answer all required questions.')
+      return
+    }
+    setJoining(true)
+    setJoinErr('')
+    try {
+      const r = await api.post(`/hackathons/${joinFor.id}/join`, { answers: joinAnswers })
+      const id = joinFor.id
+      flash(r.data.message)
+      setJoinFor(null)
+      await load()
+      if (detail?.id === id) open(id)
+    } catch (err) {
+      setJoinErr(msg(err, 'Could not join this hackathon'))
+    } finally {
+      setJoining(false)
     }
   }
 
@@ -271,7 +479,7 @@ export default function Hackathons() {
       )
     if (h.status === 'upcoming' || h.status === 'live')
       return (
-        <button disabled={busy} onClick={() => act(h.id, 'join')}
+        <button disabled={busy} onClick={() => startJoin(h)}
           className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
           Join hackathon
         </button>
@@ -527,6 +735,25 @@ export default function Hackathons() {
 
             {detail.description && <p className="text-sm text-gray-700 mt-4 whitespace-pre-line leading-relaxed">{detail.description}</p>}
 
+            {/* Tasks (members only) */}
+            {joined.includes(detail.id) && (
+              <div className="mt-5">
+                <h3 className="font-semibold text-sm mb-2 text-gray-900">Your tasks</h3>
+                {tasks === null ? (
+                  <p className="text-sm text-gray-500">Loading tasks…</p>
+                ) : tasks.length === 0 ? (
+                  <p className="text-sm text-gray-500">No tasks have been posted yet. Check back soon.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {tasks.map((t) => (
+                      <TaskCard key={t.id} hackathonId={detail.id} task={t}
+                        onSaved={(m) => { flash(m); loadTasks(detail.id) }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {detail.tracks?.length > 0 && (
               <div className="mt-5">
                 <h3 className="font-semibold text-sm mb-2 text-gray-900">Challenges / Tracks</h3>
@@ -555,6 +782,57 @@ export default function Hackathons() {
 
             <div className="mt-6 pt-4 border-t border-gray-100"><JoinButton h={detail} /></div>
           </div>
+        </div>
+      )}
+
+      {/* Join modal: registration questions */}
+      {joinFor && (
+        <div className="fixed inset-0 z-30 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => { if (!joining) setJoinFor(null) }}>
+          <form onSubmit={submitJoin} noValidate
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Join {joinFor.name}</h2>
+                <p className="text-sm text-gray-500 mt-1">Answer a few questions to complete your registration.</p>
+              </div>
+              <button type="button" onClick={() => setJoinFor(null)} disabled={joining} aria-label="Close"
+                className="text-gray-400 hover:text-gray-700">
+                <Icon name="x" className="w-6 h-6" />
+              </button>
+            </div>
+
+            {joinErr && (
+              <div role="alert" className="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
+                {joinErr}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-4">
+              {joinFor.questions.map((q) => (
+                <div key={q.id}>
+                  <label htmlFor={`q-${q.id}`} className="block text-sm font-medium text-gray-800 mb-1.5">
+                    {q.question}{q.required ? ' *' : ' (optional)'}
+                  </label>
+                  <textarea id={`q-${q.id}`} rows={3} value={joinAnswers[q.id] || ''}
+                    onChange={(e) => setJoinAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setJoinFor(null)} disabled={joining}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={joining}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {joining ? 'Joining…' : 'Join hackathon'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

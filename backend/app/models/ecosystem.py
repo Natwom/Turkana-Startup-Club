@@ -117,6 +117,60 @@ class HackathonJudge(Base):
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
 
+class HackathonQuestion(Base):
+    """A question members answer when they join a hackathon."""
+    __tablename__ = "hackathon_questions"
+    id = Column(String, primary_key=True, default=uid)
+    hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
+    question = Column(Text, nullable=False)
+    required = Column(String(1), default="1")   # "1" required, "0" optional
+    position = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class HackathonAnswer(Base):
+    __tablename__ = "hackathon_answers"
+    __table_args__ = (UniqueConstraint("question_id", "user_id", name="uq_hack_answer"),)
+    id = Column(String, primary_key=True, default=uid)
+    hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
+    question_id = Column(String, ForeignKey("hackathon_questions.id", ondelete="CASCADE"), index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    answer = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class HackathonTask(Base):
+    """A task participants must complete within a time window (times stored in UTC)."""
+    __tablename__ = "hackathon_tasks"
+    id = Column(String, primary_key=True, default=uid)
+    hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
+    title = Column(String(200), nullable=False)
+    instructions = Column(Text, default="")
+    points = Column(Integer, default=10)
+    opens_at = Column(DateTime, nullable=True)
+    closes_at = Column(DateTime, nullable=True)
+    submission_type = Column(String(10), default="either")  # link|text|either
+    position = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TaskSubmission(Base):
+    __tablename__ = "hackathon_task_submissions"
+    __table_args__ = (UniqueConstraint("task_id", "user_id", name="uq_task_submission"),)
+    id = Column(String, primary_key=True, default=uid)
+    task_id = Column(String, ForeignKey("hackathon_tasks.id", ondelete="CASCADE"), index=True)
+    hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    link = Column(String(500), default="")
+    text = Column(Text, default="")
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    score = Column(Integer, nullable=True)
+    feedback = Column(Text, default="")
+    reviewed_by = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+
 # ---------- STARTUPS ----------
 class Startup(Base):
     __tablename__ = "startups"
