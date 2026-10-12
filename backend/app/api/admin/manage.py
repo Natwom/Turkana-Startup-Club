@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/admin", tags=["admin-manage"])
 public_router = APIRouter(prefix="/api/certificates", tags=["certificates"])
 
 HACKATHON_MODES = ["online", "in_person", "hybrid"]
-TASK_TYPES = ["link", "text", "either"]
 
 
 # ---------------------------------------------------------------- helpers
@@ -37,11 +36,6 @@ def _parse_dt(value, field: str) -> datetime:
         return datetime.fromisoformat(str(value).replace("Z", ""))
     except ValueError:
         raise HTTPException(422, f"Invalid date/time for '{field}'")
-
-
-def _z(dt):
-    """Naive-UTC datetime -> ISO string with 'Z' so browsers show it in local time."""
-    return dt.isoformat() + "Z" if dt else None
 
 
 def _slugify(text: str) -> str:
@@ -70,13 +64,6 @@ def _check_hackathon(values: dict) -> None:
         raise HTTPException(422, "'ends_at' must be after 'starts_at'")
 
 
-def _check_task(values: dict) -> None:
-    if values.get("points", 10) < 0:
-        raise HTTPException(422, "'points' can't be negative")
-    if "opens_at" in values and "closes_at" in values and values["closes_at"] <= values["opens_at"]:
-        raise HTTPException(422, "'closes_at' must be after 'opens_at'")
-
-
 # ------------------------------------------------- generic CREATE endpoints
 # path (POST /api/admin/<path>) -> spec
 CREATE_SPECS = {
@@ -95,23 +82,6 @@ CREATE_SPECS = {
     "hackathons/challenges": dict(
         model="HackathonTrack", perm="hackathons.manage", label="Challenge", audit="hackathon.track",
         required=["hackathon_id", "name"], fields=["hackathon_id", "name", "description"],
-        parent=("hackathon_id", "Hackathon")),
-    "hackathons/questions": dict(
-        model="HackathonQuestion", perm="hackathons.manage", label="Question",
-        audit="hackathon.question",
-        required=["hackathon_id", "question"],
-        fields=["hackathon_id", "question", "required", "position"],
-        ints=["position"], choices={"required": ["1", "0"]}, defaults={"required": "1"},
-        parent=("hackathon_id", "Hackathon")),
-    "hackathons/tasks": dict(
-        model="HackathonTask", perm="hackathons.manage", label="Task", audit="hackathon.task",
-        required=["hackathon_id", "title"],
-        fields=["hackathon_id", "title", "instructions", "points", "opens_at", "closes_at",
-                "submission_type", "position"],
-        dates=["opens_at", "closes_at"], ints=["points", "position"],
-        choices={"submission_type": TASK_TYPES},
-        defaults={"submission_type": "either", "points": 10},
-        check=_check_task,
         parent=("hackathon_id", "Hackathon")),
     "hackathons/criteria": dict(
         model="JudgingCriterion", perm="hackathons.manage", label="Criterion", audit="hackathon.criterion",
@@ -175,7 +145,7 @@ def _create_endpoint(spec: dict):
             if f in values and values[f] not in allowed:
                 raise HTTPException(422, f"'{f}' must be one of: {', '.join(allowed)}")
         if spec.get("check"):
-            spec["check"]({**spec.get("defaults", {}), **values})
+            spec["check"](values)
         if spec.get("parent"):
             field, parent_model = spec["parent"]
             if not db.get(getattr(M, parent_model), values.get(field)):
@@ -405,115 +375,10 @@ def _participants(db: Session = Depends(get_db)):
             for p, u in rows]
 
 
-def _questions(db: Session = Depends(get_db)):
-    names = _hack_names(db)
-    rows = (db.query(M.HackathonQuestion)
-            .order_by(M.HackathonQuestion.hackathon_id, M.HackathonQuestion.position,
-                      M.HackathonQuestion.created_at).all())
-    counts = dict(db.query(M.HackathonAnswer.question_id, func.count(M.HackathonAnswer.id))
-                  .group_by(M.HackathonAnswer.question_id).all())
-    return [{"id": q.id, "hackathon": names.get(q.hackathon_id, ""),
-             "question": q.question, "is_required": q.required == "1",
-             "position": q.position, "answers": counts.get(q.id, 0)}
-            for q in rows]
-
-
-def _answers(db: Session = Depends(get_db)):
-    names = _hack_names(db)
-    questions = {q.id: q.question for q in db.query(M.HackathonQuestion).all()}
-    rows = (db.query(M.HackathonAnswer, M.User)
-            .join(M.User, M.User.id == M.HackathonAnswer.user_id)
-            .order_by(M.HackathonAnswer.created_at.desc()).limit(500).all())
-    return [{"id": a.id, "hackathon": names.get(a.hackathon_id, ""),
-             "participant": u.full_name, "email": u.email,
-             "question": questions.get(a.question_id, ""), "answer": a.answer,
-             "answered_at": a.created_at}
-            for a, u in rows]
-
-
-def _tasks(db: Session = Depends(get_db)):
-    names = _hack_names(db)
-    counts = dict(db.query(M.TaskSubmission.task_id, func.count(M.TaskSubmission.id))
-                  .group_by(M.TaskSubmission.task_id).all())
-    rows = (db.query(M.HackathonTask)
-            .order_by(M.HackathonTask.hackathon_id, M.HackathonTask.position,
-                      M.HackathonTask.created_at).all())
-    return [{"id": t.id, "hackathon": names.get(t.hackathon_id, ""), "title": t.title,
-             "points": t.points, "opens_at": _z(t.opens_at), "closes_at": _z(t.closes_at),
-             "type": t.submission_type, "submissions": counts.get(t.id, 0)}
-            for t in rows]
-
-
-def _submissions(db: Session = Depends(get_db)):
-    names = _hack_names(db)
-    tasks = {t.id: t for t in db.query(M.HackathonTask).all()}
-    rows = (db.query(M.TaskSubmission, M.User)
-            .join(M.User, M.User.id == M.TaskSubmission.user_id)
-            .order_by(M.TaskSubmission.updated_at.desc()).limit(500).all())
-    out = []
-    for s, u in rows:
-        t = tasks.get(s.task_id)
-        title = t.title if t else ""
-        hack = names.get(s.hackathon_id, "")
-        out.append({
-            "id": s.id,
-            "task": f"{hack} · {title}",
-            "member": u.full_name,
-            "submitted_at": _z(s.updated_at or s.submitted_at),
-            "link": s.link,
-            "text": s.text,
-            "score": f"{s.score}/{t.points}" if (s.score is not None and t) else None,
-            "status": "reviewed" if s.score is not None else "pending",
-            "feedback": s.feedback,
-            "label": f"{u.full_name} — {title} ({hack})",
-        })
-    return out
-
-
 for _p, _fn in (("hackathons/challenges", _challenges),
                 ("hackathons/judges", _judges),
-                ("hackathons/participants", _participants),
-                ("hackathons/questions", _questions),
-                ("hackathons/answers", _answers),
-                ("hackathons/tasks", _tasks),
-                ("hackathons/submissions", _submissions)):
+                ("hackathons/participants", _participants)):
     router.add_api_route(
         f"/{_p}", _fn, methods=["GET"],
         dependencies=[Depends(require_permission("hackathons.manage"))],
         name=f"enriched_{_p.replace('/', '_')}")
-
-
-# ------------------------------------------------ SCORE A TASK SUBMISSION
-@router.post("/hackathons/submissions/review")
-def review_submission(request: Request,
-                      payload: dict = Body(...),
-                      db: Session = Depends(get_db),
-                      admin: M.User = Depends(require_permission("hackathons.manage"))):
-    data = _clean(payload)
-    for r in ("submission_id", "score"):
-        if r not in data:
-            raise HTTPException(422, f"'{r}' is required")
-    sub = db.get(M.TaskSubmission, data["submission_id"])
-    if not sub:
-        raise HTTPException(404, "Submission not found")
-    task = db.get(M.HackathonTask, sub.task_id)
-    try:
-        score = int(data["score"])
-    except (TypeError, ValueError):
-        raise HTTPException(422, "'score' must be a number")
-    max_points = task.points if task else 0
-    if score < 0 or score > max_points:
-        raise HTTPException(422, f"Score must be between 0 and {max_points}")
-
-    sub.score = score
-    sub.feedback = data.get("feedback", "")
-    sub.reviewed_by = admin.id
-    sub.reviewed_at = datetime.utcnow()
-    db.commit()
-
-    title = task.title if task else "your task"
-    notify(db, sub.user_id, f"Your submission for \"{title}\" was reviewed",
-           body=f"Score: {score}/{max_points}", ntype="hackathon", link="/hackathons")
-    log_action(db, admin.id, "hackathon.submission.review", "TaskSubmission", sub.id,
-               {"score": score}, request=request)
-    return {"message": f"Scored {score}/{max_points}"}

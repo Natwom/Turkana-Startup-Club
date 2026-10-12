@@ -16,7 +16,7 @@ const TONE_CLASSES = {
 
 const STATUS_TONES = {
   green: ['approved', 'verified', 'published', 'active', 'open', 'live', 'completed', 'accepted',
-    'resolved', 'issued', 'registered', 'confirmed', 'running', 'attended', 'featured', 'reviewed'],
+    'resolved', 'issued', 'registered', 'confirmed', 'running', 'attended', 'featured'],
   amber: ['pending', 'draft', 'upcoming', 'judging', 'waitlisted', 'review', 'submitted'],
   red: ['rejected', 'cancelled', 'canceled', 'suspended', 'failed', 'declined', 'banned'],
 }
@@ -273,10 +273,7 @@ function ActionForm({ config, onSaved, onCancel }) {
     config.fields.forEach((f) => {
       const v = values[f.name]
       if (isEmpty(v)) return
-      if (f.type === 'number') payload[f.name] = Number(v)
-      // fields marked utc are sent as real UTC instants so deadlines are right for everyone
-      else if (f.utc && f.type === 'datetime-local') payload[f.name] = new Date(v).toISOString()
-      else payload[f.name] = v
+      payload[f.name] = f.type === 'number' ? Number(v) : v
     })
     try {
       const r = await api.post(config.endpoint, payload)
