@@ -196,7 +196,7 @@ function Modal({ title, children, onClose, labelledBy, wide = false }) {
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-slate-900/50 px-4 py-6 backdrop-blur-sm"
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-6 backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
       role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
       <div className={`w-full ${wide ? 'max-w-xl' : 'max-w-md'} rounded-2xl bg-white p-6 shadow-2xl`}>
@@ -235,6 +235,12 @@ function ActionForm({ config, onSaved, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [missing, setMissing] = useState([])
+
+  // keep the error visible: scroll it into view whenever it changes
+  const errRef = useRef(null)
+  useEffect(() => {
+    if (err) errRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [err])
 
   useEffect(() => {
     let alive = true
@@ -279,7 +285,15 @@ function ActionForm({ config, onSaved, onCancel }) {
       const r = await api.post(config.endpoint, payload)
       onSaved(r.data?.message || 'Saved')
     } catch (ex) {
-      setErr(errorMessage(ex, 'Could not save'))
+      const status = ex.response?.status
+      const detail = ex.response?.data?.detail
+      const text = Array.isArray(detail)
+        ? detail.map((d) => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ')
+        : typeof detail === 'string'
+          ? detail
+          : errorMessage(ex, 'Could not save')
+      console.error('Save failed', ex.response || ex)
+      setErr(status ? `[${status}] ${text}` : text)
       setSaving(false)
     }
   }
@@ -328,12 +342,6 @@ function ActionForm({ config, onSaved, onCancel }) {
 
   return (
     <form onSubmit={submit} noValidate className="mt-5 space-y-4">
-      {err && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
-          <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{err}</span>
-        </div>
-      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {config.fields.map((f, i) => (
           <div key={f.name} className={f.wide ? 'sm:col-span-2' : ''}>
@@ -344,6 +352,14 @@ function ActionForm({ config, onSaved, onCancel }) {
           </div>
         ))}
       </div>
+
+      {err && (
+        <div ref={errRef} role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+          <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="break-words">{err}</span>
+        </div>
+      )}
+
       <div className="flex justify-end gap-2 pt-2">
         {onCancel && (
           <button type="button" onClick={onCancel} disabled={saving}
