@@ -38,6 +38,8 @@ class HackathonParticipant(Base):
     hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     checked_in = Column(String(1), default="0")
+    status = Column(String(20), nullable=False, default="approved",
+                    server_default="approved")  # pending|approved|rejected
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -115,6 +117,26 @@ class HackathonJudge(Base):
     id = Column(String, primary_key=True, default=uid)
     hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+
+
+# ---------- HACKATHON APPLICATION QUESTIONS ----------
+class HackathonQuestion(Base):
+    __tablename__ = "hackathon_questions"
+    id = Column(String, primary_key=True, default=uid)
+    hackathon_id = Column(String, ForeignKey("hackathons.id", ondelete="CASCADE"), index=True)
+    question = Column(String(500), nullable=False)
+    qtype = Column(String(20), default="text")      # text|textarea|select|yesno
+    options = Column(Text, default="")              # comma separated, for select
+    required = Column(String(1), default="1")
+    position = Column(Integer, default=0)
+
+
+class HackathonAnswer(Base):
+    __tablename__ = "hackathon_answers"
+    id = Column(String, primary_key=True, default=uid)
+    participant_id = Column(String, ForeignKey("hackathon_participants.id", ondelete="CASCADE"), index=True)
+    question_id = Column(String, ForeignKey("hackathon_questions.id", ondelete="CASCADE"), index=True)
+    answer = Column(Text, default="")
 
 
 # ---------- STARTUPS ----------

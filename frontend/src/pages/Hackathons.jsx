@@ -30,6 +30,7 @@ const ICONS = {
   flag: [
     'M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5',
   ],
+  clock: ['M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'],
 }
 
 function Icon({ name, className = 'w-4 h-4' }) {
@@ -81,9 +82,12 @@ const fmtDate = (d) =>
 const fmtTime = (d) =>
   d ? new Date(d).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' }) : null
 
+// FastAPI returns either a string or a list of validation errors in `detail`
 const msg = (err, fallback) => {
   const d = err?.response?.data?.detail
-  return typeof d === 'string' ? d : fallback
+  if (typeof d === 'string') return d
+  if (Array.isArray(d) && d.length) return d.map((x) => x.msg).join('; ')
+  return fallback
 }
 
 const modeOf = (h) => h?.mode || 'in_person'
@@ -168,28 +172,147 @@ function Where({ h, className = '' }) {
   )
 }
 
+/* ── Application form: shown before joining a hackathon that has questions ── */
+function ApplyModal({ hackathon, questions, busy, error, onSubmit, onClose }) {
+  const [answers, setAnswers] = useState({})
+  const [missing, setMissing] = useState([])
+  const [localErr, setLocalErr] = useState('')
+
+  const set = (id, v) => {
+    setAnswers((a) => ({ ...a, [id]: v }))
+    setMissing((m) => m.filter((x) => x !== id))
+  }
+
+  const submit = (e) => {
+    e.preventDefault()
+    const empty = questions.filter((q) => q.required && !String(answers[q.id] ?? '').trim())
+    setMissing(empty.map((q) => q.id))
+    if (empty.length) {
+      setLocalErr('Please answer all required questions (marked with *).')
+      return
+    }
+    setLocalErr('')
+    onSubmit(answers)
+  }
+
+  const inputCls = (id) =>
+    `w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 ${
+      missing.includes(id) ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-emerald-500'}`
+
+  const shownErr = localErr || error
+
+  return (
+    <div className="fixed inset-0 z-30 bg-gray-900/50 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      onClick={busy ? undefined : onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 my-auto" onClick={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-labelledby="apply-title">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="apply-title" className="text-lg font-bold text-gray-900">Apply to {hackathon.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Answer a few questions. Organisers review every application and you'll be notified of the result.
+            </p>
+          </div>
+          <button onClick={onClose} disabled={busy} aria-label="Close" className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
+            <Icon name="x" className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} noValidate className="mt-5 space-y-4">
+          {questions.map((q, i) => (
+            <div key={q.id}>
+              <label htmlFor={`q-${q.id}`} className="block text-sm font-medium text-gray-800 mb-1.5">
+                {i + 1}. {q.question}{q.required ? ' *' : ''}
+              </label>
+
+              {q.qtype === 'textarea' && (
+                <textarea id={`q-${q.id}`} rows={4} value={answers[q.id] ?? ''}
+                  onChange={(e) => set(q.id, e.target.value)} className={inputCls(q.id)} />
+              )}
+
+              {q.qtype === 'select' && (
+                <select id={`q-${q.id}`} value={answers[q.id] ?? ''}
+                  onChange={(e) => set(q.id, e.target.value)} className={inputCls(q.id)}>
+                  <option value="">Select…</option>
+                  {q.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              )}
+
+              {q.qtype === 'yesno' && (
+                <div className="flex gap-2" role="radiogroup" aria-labelledby={`q-${q.id}`}>
+                  {['Yes', 'No'].map((o) => (
+                    <button key={o} type="button" role="radio" aria-checked={answers[q.id] === o}
+                      onClick={() => set(q.id, o)}
+                      className={`px-5 py-2 text-sm rounded-lg border transition-colors ${
+                        answers[q.id] === o
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : missing.includes(q.id)
+                            ? 'bg-white text-gray-600 border-red-300'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'}`}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {(!q.qtype || q.qtype === 'text') && (
+                <input id={`q-${q.id}`} type="text" value={answers[q.id] ?? ''}
+                  onChange={(e) => set(q.id, e.target.value)} className={inputCls(q.id)} />
+              )}
+            </div>
+          ))}
+
+          {shownErr && (
+            <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+              {shownErr}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} disabled={busy}
+              className="px-4 py-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100 disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={busy}
+              className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60">
+              {busy ? 'Submitting…' : 'Submit application'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Hackathons() {
   const [items, setItems] = useState([])
-  const [joined, setJoined] = useState([])
+  const [statuses, setStatuses] = useState({})   // { hackathonId: 'pending' | 'approved' | 'rejected' }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [detail, setDetail] = useState(null)
   const [busy, setBusy] = useState(false)
 
+  const [applying, setApplying] = useState(null)  // { hackathon, questions }
+  const [applyBusy, setApplyBusy] = useState(false)
+  const [applyError, setApplyError] = useState('')
+
   const [statusFilter, setStatusFilter] = useState('all')
   const [modeFilter, setModeFilter] = useState('all')
   const [mineOnly, setMineOnly] = useState(false)
   const [query, setQuery] = useState('')
 
+  const joined = useMemo(() => Object.keys(statuses), [statuses])
+  const statusOf = (id) => statuses[id] || null
+
   const load = useCallback(async () => {
     try {
       const [all, mine] = await Promise.all([
         api.get('/hackathons'),
-        api.get('/hackathons/my'),
+        api.get('/hackathons/my/status'),
       ])
       setItems(Array.isArray(all.data) ? all.data : [])
-      setJoined(Array.isArray(mine.data) ? mine.data : [])
+      setStatuses(mine.data && typeof mine.data === 'object' && !Array.isArray(mine.data) ? mine.data : {})
       setError('')
     } catch (err) {
       setError(msg(err, 'Could not load hackathons'))
@@ -201,10 +324,19 @@ export default function Hackathons() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') setDetail(null) }
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (applying) { if (!applyBusy) setApplying(null) }
+      else setDetail(null)
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [applying, applyBusy])
+
+  const flash = (text) => {
+    setNotice(text)
+    setTimeout(() => setNotice(''), 6000)
+  }
 
   const open = async (id) => {
     try {
@@ -215,19 +347,55 @@ export default function Hackathons() {
     }
   }
 
+  // leave / withdraw (and join, for hackathons without questions)
   const act = async (id, action) => {
     setBusy(true)
     setError('')
     try {
       const r = await api.post(`/hackathons/${id}/${action}`)
-      setNotice(r.data.message)
-      setTimeout(() => setNotice(''), 5000)
+      flash(r.data.message)
       await load()
       if (detail?.id === id) open(id) // keep modal in sync (also reveals/hides the meeting link)
     } catch (err) {
       setError(msg(err, 'Something went wrong'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Join: hackathons with questions open the application form first
+  const startJoin = async (h) => {
+    if (!h.has_questions) { act(h.id, 'join'); return }
+    setBusy(true)
+    setError('')
+    try {
+      const r = await api.get(`/hackathons/${h.id}/questions`)
+      const questions = Array.isArray(r.data) ? r.data : []
+      if (questions.length === 0) { await act(h.id, 'join'); return }
+      setApplyError('')
+      setApplying({ hackathon: h, questions })
+    } catch (err) {
+      setError(msg(err, 'Could not load the application form'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitApplication = async (answers) => {
+    if (!applying) return
+    const id = applying.hackathon.id
+    setApplyBusy(true)
+    setApplyError('')
+    try {
+      const r = await api.post(`/hackathons/${id}/join`, { answers })
+      setApplying(null)
+      flash(r.data.message)
+      await load()
+      if (detail?.id === id) open(id)
+    } catch (err) {
+      setApplyError(msg(err, 'Could not submit your application'))
+    } finally {
+      setApplyBusy(false)
     }
   }
 
@@ -247,21 +415,28 @@ export default function Hackathons() {
   }, [items, joined, statusFilter, modeFilter, mineOnly, query])
 
   const counts = useMemo(() => {
-    const c = { all: items.length, mine: joined.length }
+    const c = {
+      all: items.length,
+      mine: joined.length,
+      approved: joined.filter((id) => statuses[id] === 'approved').length,
+      pending: joined.filter((id) => statuses[id] === 'pending').length,
+    }
     for (const s of Object.keys(BADGE)) c[s] = items.filter((h) => h.status === s).length
     return c
-  }, [items, joined])
+  }, [items, joined, statuses])
 
   const joinedStats = useMemo(() => ({
-    live: items.filter((h) => joined.includes(h.id) && h.status === 'live').length,
-    upcoming: items.filter((h) => joined.includes(h.id) && h.status === 'upcoming').length,
-  }), [items, joined])
+    live: items.filter((h) => statuses[h.id] === 'approved' && h.status === 'live').length,
+    upcoming: items.filter((h) => statuses[h.id] === 'approved' && h.status === 'upcoming').length,
+  }), [items, statuses])
 
   const anyFilter = query || statusFilter !== 'all' || modeFilter !== 'all' || mineOnly
   const clearAll = () => { setQuery(''); setStatusFilter('all'); setModeFilter('all'); setMineOnly(false) }
 
   const JoinButton = ({ h }) => {
-    if (joined.includes(h.id))
+    const st = statusOf(h.id)
+
+    if (st === 'approved')
       return (
         <button disabled={busy} onClick={() => act(h.id, 'leave')}
           className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 transition-colors">
@@ -269,14 +444,49 @@ export default function Hackathons() {
           Joined · Leave
         </button>
       )
-    if (h.status === 'upcoming' || h.status === 'live')
+
+    if (st === 'pending')
       return (
-        <button disabled={busy} onClick={() => act(h.id, 'join')}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-          Join hackathon
+        <button disabled={busy} onClick={() => act(h.id, 'leave')}
+          className="inline-flex items-center gap-1.5 px-4 py-2 border border-amber-300 bg-amber-50 text-amber-800 text-sm rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 transition-colors">
+          <Icon name="clock" className="w-4 h-4" />
+          Pending review · Withdraw
         </button>
       )
+
+    if (st === 'rejected')
+      return <span className="text-sm text-gray-500">Not selected for this hackathon</span>
+
+    if (h.status === 'upcoming' || h.status === 'live')
+      return (
+        <button disabled={busy} onClick={() => startJoin(h)}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+          {h.has_questions ? 'Apply to join' : 'Join hackathon'}
+        </button>
+      )
+
     return <span className="text-sm text-gray-400">Registration closed</span>
+  }
+
+  const StatusTag = ({ id }) => {
+    const st = statusOf(id)
+    if (st === 'approved')
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+          <Icon name="check" className="w-3.5 h-3.5" />
+          Joined
+        </span>
+      )
+    if (st === 'pending')
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+          <Icon name="clock" className="w-3.5 h-3.5" />
+          Pending review
+        </span>
+      )
+    if (st === 'rejected')
+      return <span className="text-[11px] font-medium text-gray-500">Not selected</span>
+    return null
   }
 
   const emptyIcon = mineOnly ? 'ticket' : anyFilter ? 'search' : 'flag'
@@ -288,7 +498,8 @@ export default function Hackathons() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Hackathons</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {counts.all} events · you joined {counts.mine}
+            {counts.all} events · you joined {counts.approved}
+            {counts.pending > 0 && <span className="text-amber-600 font-medium"> · {counts.pending} pending review</span>}
             {joinedStats.live > 0 && <span className="text-emerald-600 font-medium"> · {joinedStats.live} live now</span>}
           </p>
         </div>
@@ -409,7 +620,8 @@ export default function Hackathons() {
           {visible.map((h) => (
             <article key={h.id}
               className={`bg-white border rounded-2xl p-5 flex flex-col shadow-sm hover:shadow-md transition-shadow
-                ${joined.includes(h.id) ? 'border-emerald-300' : 'border-gray-200'}`}>
+                ${statusOf(h.id) === 'approved' ? 'border-emerald-300'
+                  : statusOf(h.id) === 'pending' ? 'border-amber-300' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-inset capitalize ${BADGE[h.status] ?? BADGE.completed}`}>
@@ -418,12 +630,7 @@ export default function Hackathons() {
                   </span>
                   <ModeBadge mode={modeOf(h)} />
                 </div>
-                {joined.includes(h.id) && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                    Joined
-                  </span>
-                )}
+                <StatusTag id={h.id} />
               </div>
 
               <h3 className="font-bold text-gray-900 mt-2 leading-snug">{h.name}</h3>
@@ -497,6 +704,19 @@ export default function Hackathons() {
             )}
             <Where h={detail} className="mt-1" />
 
+            {/* Application status banner */}
+            {statusOf(detail.id) === 'pending' && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2">
+                <Icon name="clock" className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>Your application is under review. You'll get a notification once it's decided.</span>
+              </div>
+            )}
+            {statusOf(detail.id) === 'rejected' && (
+              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                Thanks for applying. You weren't selected for this hackathon.
+              </div>
+            )}
+
             {/* Online access */}
             {modeOf(detail) !== 'in_person' && detail.has_meeting_link && (
               <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
@@ -512,9 +732,13 @@ export default function Hackathons() {
                   </a>
                 ) : (
                   <p className="mt-1 text-sm text-violet-800">
-                    {joined.includes(detail.id)
+                    {statusOf(detail.id) === 'approved'
                       ? 'The meeting link will appear here once the hackathon is open.'
-                      : 'Join this hackathon to see the online meeting link.'}
+                      : statusOf(detail.id) === 'pending'
+                        ? 'The meeting link is shown once your application is approved.'
+                        : detail.has_questions
+                          ? 'Apply and get approved to see the online meeting link.'
+                          : 'Join this hackathon to see the online meeting link.'}
                   </p>
                 )}
               </div>
@@ -556,6 +780,19 @@ export default function Hackathons() {
             <div className="mt-6 pt-4 border-t border-gray-100"><JoinButton h={detail} /></div>
           </div>
         </div>
+      )}
+
+      {/* Application form */}
+      {applying && (
+        <ApplyModal
+          key={applying.hackathon.id}
+          hackathon={applying.hackathon}
+          questions={applying.questions}
+          busy={applyBusy}
+          error={applyError}
+          onSubmit={submitApplication}
+          onClose={() => setApplying(null)}
+        />
       )}
     </div>
   )

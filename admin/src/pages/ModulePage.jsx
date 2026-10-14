@@ -7,6 +7,9 @@ import { FORMS, ROW_ACTIONS } from '../services/moduleConfig'
 const PAGE_SIZES = [10, 25, 50]
 const MAX_COLUMNS = 7
 
+// pages whose rows get a "View answers" button that opens a details window
+const DETAIL_PAGES = ['hackathons/applications']
+
 const TONE_CLASSES = {
   green: 'bg-emerald-100 text-emerald-700',
   amber: 'bg-amber-100 text-amber-700',
@@ -227,6 +230,68 @@ function ConfirmDialog({ dialog, busy, onCancel, onConfirm }) {
   )
 }
 
+/* ------------------------------------------------------------------ row details (applications) */
+function DetailModal({ row, onClose, actions, busy, onAction }) {
+  const entries = Object.entries(row).filter(([k]) => k !== 'id')
+  const available = actions.filter((a) => a.when(row))
+
+  // "Question: answer | Question: answer" -> [{ q, a }]
+  const parseAnswers = (text) =>
+    String(text || '').split(' | ').filter(Boolean).map((part) => {
+      const i = part.indexOf(': ')
+      return i === -1 ? { q: part, a: '' } : { q: part.slice(0, i), a: part.slice(i + 2) }
+    })
+
+  return (
+    <Modal title="Application details" onClose={onClose} labelledBy="detail-title" wide>
+      <dl className="mt-4 space-y-3">
+        {entries.map(([k, v]) => {
+          if (k === 'answers') {
+            const items = parseAnswers(v)
+            return (
+              <div key={k}>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Answers</dt>
+                <dd className="mt-1.5 space-y-2">
+                  {items.length === 0 && (
+                    <p className="text-sm text-slate-400">No questions were asked for this hackathon.</p>
+                  )}
+                  {items.map((it, i) => (
+                    <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <p className="text-xs font-semibold text-slate-500">{it.q}</p>
+                      <p className="mt-1 whitespace-pre-line break-words text-sm text-slate-800">
+                        {it.a || <span className="text-slate-300">—</span>}
+                      </p>
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )
+          }
+          return (
+            <div key={k}>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{columnLabel(k)}</dt>
+              <dd className="mt-0.5 break-words text-sm text-slate-800"><Cell v={v} col={k} /></dd>
+            </div>
+          )
+        })}
+      </dl>
+
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <button onClick={onClose}
+          className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
+          Close
+        </button>
+        {available.map((a) => (
+          <button key={a.action} onClick={() => onAction(row, a)} disabled={busy}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${ACTION_TONES[a.tone] || ACTION_TONES.gray}`}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
 /* ------------------------------------------------------------------ add / issue form */
 function ActionForm({ config, onSaved, onCancel }) {
   const [values, setValues] = useState(() =>
@@ -384,6 +449,7 @@ export default function ModulePage() {
   const apiPath = `/admin/${splat}`
   const form = FORMS[splat]
   const actions = ROW_ACTIONS[splat] || []
+  const canView = DETAIL_PAGES.includes(splat)
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -402,6 +468,7 @@ export default function ModulePage() {
   const [busyId, setBusyId] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
+  const [viewId, setViewId] = useState(null)   // id of the row open in the details window
   const [toast, setToast] = useState(null)
 
   const reqId = useRef(0)
@@ -452,6 +519,7 @@ export default function ModulePage() {
     setSortDir('asc')
     setPage(1)
     setShowForm(false)
+    setViewId(null)
     setToast(null)
     setFormKey((k) => k + 1)
     setData(null)
@@ -526,9 +594,14 @@ export default function ModulePage() {
   const start = (safePage - 1) * pageSize
   const pageItems = sorted.slice(start, start + pageSize)
 
-  const hasActions = actions.length > 0 && rows && rows.length > 0 && 'id' in rows[0]
+  const hasActions = (actions.length > 0 || canView) && rows && rows.length > 0 && 'id' in rows[0]
   const hasFilters = q.trim() !== '' || statusFilter !== 'all'
   const clearFilters = () => { setQ(''); setStatusFilter('all') }
+
+  // the row currently open in the details window (re-read from data so it stays fresh after approve/reject)
+  const viewRow = useMemo(
+    () => (viewId && rows ? rows.find((r) => r.id === viewId) || null : null),
+    [viewId, rows])
 
   const noEndpoint = error && [404, 405, 501].includes(error.status)
   const noList = Boolean(noEndpoint && form)   // a form, but no list endpoint yet
@@ -554,7 +627,9 @@ export default function ModulePage() {
       notify('success', r.data?.message || `${a.label} done.`)
       await load(true)
     } catch (err) {
-      notify('warning', errorMessage(err, 'Action failed'))
+      const status = err.response?.status
+      const text = errorMessage(err, 'Action failed')
+      notify('warning', status ? `[${status}] ${text}` : text)
     } finally {
       setBusyId(null)
     }
@@ -582,6 +657,12 @@ export default function ModulePage() {
 
   const RowButtons = ({ row }) => (
     <div className="flex flex-wrap justify-end gap-2">
+      {canView && (
+        <button onClick={() => setViewId(row.id)}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${ACTION_TONES.gray}`}>
+          View answers
+        </button>
+      )}
       {actions.filter((a) => a.when(row)).map((a) => (
         <button key={a.action} onClick={() => askAction(row, a)} disabled={busyId === row.id}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${ACTION_TONES[a.tone] || ACTION_TONES.gray}`}>
@@ -866,6 +947,15 @@ export default function ModulePage() {
         <Modal title={form.title} onClose={() => setShowForm(false)} labelledBy="module-form-title" wide>
           <ActionForm config={form} onSaved={onSaved} onCancel={() => setShowForm(false)} />
         </Modal>
+      )}
+      {viewRow && !confirm && (
+        <DetailModal
+          row={viewRow}
+          actions={actions}
+          busy={busyId === viewRow.id}
+          onClose={() => setViewId(null)}
+          onAction={askAction}
+        />
       )}
       {confirm && <ConfirmDialog dialog={confirm} busy={confirmBusy} onCancel={() => setConfirm(null)} onConfirm={doConfirm} />}
       <Toast toast={toast} onClose={() => setToast(null)} />

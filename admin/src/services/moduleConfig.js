@@ -75,6 +75,29 @@ addForm(['hackathons/criteria'], {
   ],
 })
 
+// Questions students answer before they can join a hackathon
+addForm(['hackathons/questions'], {
+  title: 'Add Registration Question', button: 'Add question',
+  endpoint: '/admin/hackathons/questions',
+  fields: [
+    hackathon,
+    { name: 'question', label: 'Question', required: true, wide: true,
+      placeholder: 'e.g. What is your experience level with programming?' },
+    { name: 'qtype', label: 'Answer type', type: 'select', required: true, default: 'text',
+      options: [
+        { value: 'text', label: 'Short answer' },
+        { value: 'textarea', label: 'Long answer' },
+        { value: 'select', label: 'Multiple choice' },
+        { value: 'yesno', label: 'Yes / No' },
+      ] },
+    { name: 'required', label: 'Required?', type: 'select', default: '1',
+      options: [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] },
+    { name: 'options', label: 'Choices (comma separated, multiple choice only)', wide: true,
+      placeholder: 'Beginner, Intermediate, Advanced' },
+    { name: 'position', label: 'Order (0 = first)', type: 'number', default: 0 },
+  ],
+})
+
 addForm(['chapters/all-chapters', 'chapters/create-chapter'], {
   title: 'Create Chapter', button: 'Create chapter', endpoint: '/admin/chapters',
   fields: [
@@ -241,6 +264,21 @@ addActions(['hackathons/all-hackathons'], [
   { label: 'Start judging', base: 'hackathons', action: 'start-judging', tone: N, when: (r) => r.status === 'live' },
   { label: 'Complete', base: 'hackathons', action: 'complete', tone: N, when: (r) => r.status === 'judging' },
   { label: 'Archive', base: 'hackathons', action: 'archive', tone: N, when: (r) => r.status === 'completed' },
+])
+
+// Review student applications (answers are shown in the "Answers" column)
+addActions(['hackathons/applications'], [
+  { label: 'Approve', base: 'hackathons/applications', action: 'approve', tone: G,
+    when: (r) => r.status !== 'approved' },
+  { label: 'Reject', base: 'hackathons/applications', action: 'reject', tone: R,
+    confirm: 'Reject this application? The student will be notified.',
+    when: (r) => r.status === 'pending' },
+])
+
+addActions(['hackathons/questions'], [
+  { label: 'Delete', base: 'hackathons/questions', action: 'delete', tone: R,
+    confirm: 'Delete this question? Students\' existing answers to it are removed too.',
+    when: () => true },
 ])
 
 addActions(['events/create-event'], [

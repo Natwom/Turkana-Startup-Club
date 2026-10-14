@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models as M
+from app.models import ecosystem as _eco
 from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.services.audit import log_action
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin-manage"])
 public_router = APIRouter(prefix="/api/certificates", tags=["certificates"])
 
 HACKATHON_MODES = ["online", "in_person", "hybrid"]
+QUESTION_TYPES = ["text", "textarea", "select", "yesno"]
 
 
 # ---------------------------------------------------------------- helpers
@@ -49,6 +51,14 @@ def _user_by_email(db: Session, email: str):
     return u
 
 
+def _model_cls(name: str):
+    """Find a model by class name in app.models, falling back to the ecosystem module."""
+    cls = getattr(M, name, None) or getattr(_eco, name, None)
+    if cls is None:
+        raise HTTPException(500, f"Model '{name}' is not available")
+    return cls
+
+
 def _check_hackathon(values: dict) -> None:
     """Extra validation for hackathons: online/hybrid need a link, end must follow start."""
     mode = values.get("mode", "in_person")
@@ -62,6 +72,14 @@ def _check_hackathon(values: dict) -> None:
         raise HTTPException(422, "The meeting link must start with http:// or https://")
     if "starts_at" in values and "ends_at" in values and values["ends_at"] <= values["starts_at"]:
         raise HTTPException(422, "'ends_at' must be after 'starts_at'")
+
+
+def _check_question(values: dict) -> None:
+    """Multiple-choice questions need at least two choices."""
+    if values.get("qtype") == "select":
+        choices = [c.strip() for c in str(values.get("options", "")).split(",") if c.strip()]
+        if len(choices) < 2:
+            raise HTTPException(422, "Multiple-choice questions need at least two choices, separated by commas")
 
 
 # ------------------------------------------------- generic CREATE endpoints
@@ -87,6 +105,16 @@ CREATE_SPECS = {
         model="JudgingCriterion", perm="hackathons.manage", label="Criterion", audit="hackathon.criterion",
         required=["hackathon_id", "name"], fields=["hackathon_id", "name", "weight", "max_score"],
         ints=["weight", "max_score"], parent=("hackathon_id", "Hackathon")),
+    "hackathons/questions": dict(
+        model="HackathonQuestion", perm="hackathons.manage", label="Question",
+        audit="hackathon.question",
+        required=["hackathon_id", "question"],
+        fields=["hackathon_id", "question", "qtype", "options", "required", "position"],
+        ints=["position"],
+        choices={"qtype": QUESTION_TYPES, "required": ["0", "1"]},
+        defaults={"qtype": "text", "required": "1"},
+        parent=("hackathon_id", "Hackathon"),
+        check=_check_question),
     "hackathons/judges": dict(
         model="HackathonJudge", perm="hackathons.manage", label="Judge", audit="hackathon.judge",
         required=["hackathon_id", "user_email"], fields=["hackathon_id"], user_email=True,
@@ -95,6 +123,7 @@ CREATE_SPECS = {
         model="HackathonParticipant", perm="hackathons.manage", label="Participant",
         audit="hackathon.participant",
         required=["hackathon_id", "user_email"], fields=["hackathon_id"], user_email=True,
+        defaults={"status": "approved"},          # admin-added participants skip the review
         parent=("hackathon_id", "Hackathon")),
     "opportunities": dict(
         model="Opportunity", perm="content.manage", label="Opportunity", audit="opportunity.create",
@@ -148,14 +177,14 @@ def _create_endpoint(spec: dict):
             spec["check"](values)
         if spec.get("parent"):
             field, parent_model = spec["parent"]
-            if not db.get(getattr(M, parent_model), values.get(field)):
+            if not db.get(_model_cls(parent_model), values.get(field)):
                 raise HTTPException(404, f"{parent_model} not found")
         if spec.get("user_email"):
             values["user_id"] = _user_by_email(db, data["user_email"]).id
         if spec.get("slug"):
             values["slug"] = _slugify(values["name"])
 
-        obj = getattr(M, spec["model"])(**{**spec.get("defaults", {}), **values})
+        obj = _model_cls(spec["model"])(**{**spec.get("defaults", {}), **values})
         db.add(obj)
         try:
             db.commit()
@@ -196,6 +225,8 @@ ACTIONS = {
     "hackathons": ("Hackathon", "hackathons.manage", {
         "go-live": {"status": "live"}, "start-judging": {"status": "judging"},
         "complete": {"status": "completed"}, "archive": {"status": "archived"}}),
+    "hackathons/applications": ("HackathonParticipant", "hackathons.manage", {
+        "approve": {"status": "approved"}, "reject": {"status": "rejected"}}),
 }
 
 
@@ -203,7 +234,7 @@ def _action_endpoint(model_name: str, perm: str, changes: dict, base: str, actio
     def endpoint(item_id: str, request: Request,
                  db: Session = Depends(get_db),
                  admin: M.User = Depends(require_permission(perm))):
-        obj = db.get(getattr(M, model_name), item_id)
+        obj = db.get(_model_cls(model_name), item_id)
         if not obj:
             raise HTTPException(404, f"{model_name} not found")
         for k, v in changes.items():
@@ -212,6 +243,11 @@ def _action_endpoint(model_name: str, perm: str, changes: dict, base: str, actio
         if model_name == "VolunteerApplication":
             notify(db, obj.user_id, f"Your volunteer application was {changes['status']}",
                    ntype="volunteer")
+        if model_name == "HackathonParticipant":
+            h = db.get(M.Hackathon, obj.hackathon_id)
+            notify(db, obj.user_id,
+                   f"Your application to {h.name if h else 'the hackathon'} was {changes['status']}",
+                   ntype="hackathon", link="/hackathons")
         log_action(db, admin.id, f"{base}.{action}", model_name, item_id, request=request)
         return {"message": f"{action.replace('-', ' ').title()} done"}
     return endpoint
@@ -365,9 +401,11 @@ def _judges(db: Session = Depends(get_db)):
 
 
 def _participants(db: Session = Depends(get_db)):
+    """Approved participants only. Pending/rejected people are on the Applications page."""
     names = _hack_names(db)
     rows = (db.query(M.HackathonParticipant, M.User)
             .join(M.User, M.User.id == M.HackathonParticipant.user_id)
+            .filter(M.HackathonParticipant.status == "approved")
             .order_by(M.HackathonParticipant.created_at.desc()).limit(200).all())
     return [{"id": p.id, "hackathon": names.get(p.hackathon_id, ""),
              "participant": u.full_name, "email": u.email,
@@ -382,3 +420,54 @@ for _p, _fn in (("hackathons/challenges", _challenges),
         f"/{_p}", _fn, methods=["GET"],
         dependencies=[Depends(require_permission("hackathons.manage"))],
         name=f"enriched_{_p.replace('/', '_')}")
+
+
+# ------------------------------------- hackathon questions & applications
+def _questions_list(db: Session = Depends(get_db)):
+    names = _hack_names(db)
+    rows = (db.query(_eco.HackathonQuestion)
+            .order_by(_eco.HackathonQuestion.hackathon_id,
+                      _eco.HackathonQuestion.position).all())
+    return [{"id": q.id, "hackathon": names.get(q.hackathon_id, ""),
+             "question": q.question, "type": q.qtype,
+             "required": q.required != "0", "choices": q.options,
+             "order": q.position} for q in rows]
+
+
+def _applications(db: Session = Depends(get_db)):
+    names = _hack_names(db)
+    qtext = {q.id: q.question for q in db.query(_eco.HackathonQuestion).all()}
+    answers: dict = {}
+    for a in db.query(_eco.HackathonAnswer).all():
+        answers.setdefault(a.participant_id, []).append(
+            f"{qtext.get(a.question_id, '?')}: {a.answer}")
+    rows = (db.query(M.HackathonParticipant, M.User)
+            .join(M.User, M.User.id == M.HackathonParticipant.user_id)
+            .order_by(M.HackathonParticipant.created_at.desc()).limit(200).all())
+    return [{"id": p.id, "hackathon": names.get(p.hackathon_id, ""),
+             "applicant": u.full_name, "email": u.email,
+             "status": p.status or "approved", "applied": p.created_at,
+             "answers": " | ".join(answers.get(p.id, []))}
+            for p, u in rows]
+
+
+for _p, _fn in (("hackathons/questions", _questions_list),
+                ("hackathons/applications", _applications)):
+    router.add_api_route(
+        f"/{_p}", _fn, methods=["GET"],
+        dependencies=[Depends(require_permission("hackathons.manage"))],
+        name=f"enriched_{_p.replace('/', '_')}")
+
+
+@router.post("/hackathons/questions/{item_id}/delete")
+def delete_question(item_id: str, request: Request,
+                    db: Session = Depends(get_db),
+                    admin: M.User = Depends(require_permission("hackathons.manage"))):
+    q = db.get(_eco.HackathonQuestion, item_id)
+    if not q:
+        raise HTTPException(404, "Question not found")
+    db.delete(q)
+    db.commit()
+    log_action(db, admin.id, "hackathon.question.delete", "HackathonQuestion", item_id,
+               request=request)
+    return {"message": "Question deleted"}
