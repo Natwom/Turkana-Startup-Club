@@ -1,39 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../services/api'
-
-const errorMessage = (err) => {
-  const detail = err.response?.data?.detail
-  if (typeof detail === 'string') return detail
-  if (Array.isArray(detail)) return detail.map((d) => d.msg).join(', ')
-  return 'Something went wrong. Please try again.'
-}
-
-const shortTime = (iso) => {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const today = new Date()
-  return d.toDateString() === today.toDateString()
-    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-}
-
-const dayLabel = (iso) => {
-  const d = new Date(iso)
-  const today = new Date()
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })
-}
-
-const initials = (name = '?') =>
-  name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+import GroupChat from '../components/GroupChat'
+import NewGroupModal from '../components/NewGroupModal'
+import { errorMessage, shortTime, dayLabel, initials } from '../components/chatUtils'
 
 export default function Messages() {
-  const { userId } = useParams()
+  const { userId, groupId } = useParams()
   const navigate = useNavigate()
+
+  const [tab, setTab] = useState(groupId ? 'groups' : 'chats')
   const [conversations, setConversations] = useState([])
+  const [groups, setGroups] = useState([])
+  const [showNewGroup, setShowNewGroup] = useState(false)
+
   const [thread, setThread] = useState({ user: null, messages: [] })
   const [text, setText] = useState('')
   const [error, setError] = useState('')
@@ -41,10 +21,16 @@ export default function Messages() {
   const [query, setQuery] = useState('')
   const [loadingThread, setLoadingThread] = useState(false)
 
-  const scrollRef = useRef(null)   // the scrollable message list
-  const areaRef = useRef(null)     // the textarea
+  const scrollRef = useRef(null)
+  const areaRef = useRef(null)
   const stickToBottom = useRef(true)
   const firstLoad = useRef(true)
+
+  // keep the active tab in sync with the URL (e.g. when opened from a notification)
+  useEffect(() => {
+    if (groupId) setTab('groups')
+    else if (userId) setTab('chats')
+  }, [groupId, userId])
 
   const loadConversations = useCallback(async () => {
     try {
@@ -55,10 +41,17 @@ export default function Messages() {
     }
   }, [])
 
+  const loadGroups = useCallback(async () => {
+    try {
+      const r = await api.get('/groups')
+      setGroups(Array.isArray(r.data) ? r.data : [])
+    } catch {
+      /* keep the previous list */
+    }
+  }, [])
+
   const loadThread = useCallback(async () => {
     if (!userId) return
-    // Only show the skeleton the first time a conversation opens,
-    // not on every background refresh (that caused the up/down jumping).
     if (firstLoad.current) setLoadingThread(true)
     try {
       const r = await api.get(`/messages/${userId}`)
@@ -72,7 +65,7 @@ export default function Messages() {
         return same ? prev : r.data
       })
       setError('')
-      loadConversations() // unread counts changed because the thread was opened
+      loadConversations()
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -83,9 +76,13 @@ export default function Messages() {
 
   useEffect(() => {
     loadConversations()
-    const t = setInterval(loadConversations, 15000)
+    loadGroups()
+    const t = setInterval(() => {
+      loadConversations()
+      loadGroups()
+    }, 15000)
     return () => clearInterval(t)
-  }, [loadConversations])
+  }, [loadConversations, loadGroups])
 
   useEffect(() => {
     setThread({ user: null, messages: [] })
@@ -97,7 +94,6 @@ export default function Messages() {
     return () => clearInterval(t)
   }, [loadThread])
 
-  // Scroll ONLY the message list (never the whole page) when new messages arrive
   useEffect(() => {
     const el = scrollRef.current
     if (el && stickToBottom.current) {
@@ -111,7 +107,6 @@ export default function Messages() {
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
   }
 
-  // Auto-grow the textarea up to 5 lines
   useEffect(() => {
     const el = areaRef.current
     if (!el) return
@@ -144,94 +139,197 @@ export default function Messages() {
     }
   }
 
+  const switchTab = (next) => {
+    setTab(next)
+    setQuery('')
+    navigate('/messages')
+  }
+
+  const handleGroupGone = useCallback(() => {
+    loadGroups()
+    navigate('/messages')
+  }, [loadGroups, navigate])
+
+  const unreadChats = conversations.reduce((n, c) => n + (c.unread || 0), 0)
+  const unreadGroups = groups.reduce((n, g) => n + (g.unread || 0), 0)
+
   const visibleConvs = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return conversations
     return conversations.filter((c) => (c.full_name || '').toLowerCase().includes(needle))
   }, [conversations, query])
 
-  // Group messages by day for date dividers
+  const visibleGroups = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return groups
+    return groups.filter((g) => (g.name || '').toLowerCase().includes(needle))
+  }, [groups, query])
+
   const grouped = useMemo(() => {
-    const groups = []
+    const out = []
     for (const m of thread.messages) {
       const day = new Date(m.created_at).toDateString()
-      const last = groups[groups.length - 1]
+      const last = out[out.length - 1]
       if (last && last.day === day) last.items.push(m)
-      else groups.push({ day, label: dayLabel(m.created_at), items: [m] })
+      else out.push({ day, label: dayLabel(m.created_at), items: [m] })
     }
-    return groups
+    return out
   }, [thread.messages])
+
+  const tabBtn = (id, label, unread) => (
+    <button
+      onClick={() => switchTab(id)}
+      className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors
+        ${tab === id
+          ? 'border-emerald-600 text-emerald-700'
+          : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+    >
+      {label}
+      {unread > 0 && (
+        <span className="bg-emerald-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center">
+          {unread}
+        </span>
+      )}
+    </button>
+  )
+
+  const showSearch = tab === 'chats' ? conversations.length > 3 : groups.length > 3
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Messages</h1>
-        {conversations.length > 0 && (
-          <span className="text-sm text-gray-500">
-            {conversations.reduce((n, c) => n + (c.unread || 0), 0)} unread
-          </span>
+        {(conversations.length > 0 || groups.length > 0) && (
+          <span className="text-sm text-gray-500">{unreadChats + unreadGroups} unread</span>
         )}
       </div>
 
       <div className="grid md:grid-cols-3 gap-4 h-[72vh]">
-        {/* Conversation list */}
+        {/* Left column */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col shadow-sm">
-          {conversations.length > 3 && (
+          <div className="flex border-b border-gray-100">
+            {tabBtn('chats', 'Chats', unreadChats)}
+            {tabBtn('groups', 'Groups', unreadGroups)}
+          </div>
+
+          {tab === 'groups' && (
+            <div className="p-3 border-b border-gray-100">
+              <button
+                onClick={() => setShowNewGroup(true)}
+                className="w-full text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 py-2 transition-colors"
+              >
+                + New group
+              </button>
+            </div>
+          )}
+
+          {showSearch && (
             <div className="p-3 border-b border-gray-100">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">⌕</span>
-                <input value={query} onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search conversations…"
-                  className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={tab === 'chats' ? 'Search conversations…' : 'Search groups…'}
+                  className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
             </div>
           )}
+
           <div className="flex-1 overflow-y-auto">
-            {visibleConvs.length === 0 ? (
+            {tab === 'chats' ? (
+              visibleConvs.length === 0 ? (
+                <div className="p-6 text-center">
+                  <div className="text-3xl mb-2">💬</div>
+                  <p className="text-sm text-gray-500">
+                    {query ? 'No conversations match.' : 'Connect with members in the Directory to start chatting.'}
+                  </p>
+                </div>
+              ) : (
+                visibleConvs.map((c) => (
+                  <button
+                    key={c.user_id}
+                    onClick={() => navigate(`/messages/${c.user_id}`)}
+                    className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors
+                      ${c.user_id === userId ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                          {initials(c.full_name)}
+                        </span>
+                        <span className={`text-sm truncate ${c.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                          {c.full_name}
+                        </span>
+                      </span>
+                      <span className="text-[11px] text-gray-400 shrink-0">{shortTime(c.last_message_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1 pl-[2.625rem]">
+                      <p className={`text-xs truncate ${c.unread ? 'text-gray-800' : 'text-gray-500'}`}>
+                        {c.last_message ? `${c.last_from_me ? 'You: ' : ''}${c.last_message}` : 'Say hello 👋'}
+                      </p>
+                      {c.unread > 0 && (
+                        <span className="bg-emerald-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center shrink-0">
+                          {c.unread}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )
+            ) : visibleGroups.length === 0 ? (
               <div className="p-6 text-center">
-                <div className="text-3xl mb-2">💬</div>
+                <div className="text-3xl mb-2">👥</div>
                 <p className="text-sm text-gray-500">
-                  {query ? 'No conversations match.' : 'Connect with members in the Directory to start chatting.'}
+                  {query ? 'No groups match.' : 'Create a group to chat with several connections at once.'}
                 </p>
               </div>
-            ) : visibleConvs.map((c) => (
-              <button key={c.user_id} onClick={() => navigate(`/messages/${c.user_id}`)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors
-                  ${c.user_id === userId ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
-                      {initials(c.full_name)}
+            ) : (
+              visibleGroups.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => navigate(`/messages/group/${g.id}`)}
+                  className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors
+                    ${g.id === groupId ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm">
+                        👥
+                      </span>
+                      <span className={`text-sm truncate ${g.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                        {g.name}
+                      </span>
                     </span>
-                    <span className={`text-sm truncate ${c.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
-                      {c.full_name}
-                    </span>
-                  </span>
-                  <span className="text-[11px] text-gray-400 shrink-0">{shortTime(c.last_message_at)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 mt-1 pl-[2.625rem]">
-                  <p className={`text-xs truncate ${c.unread ? 'text-gray-800' : 'text-gray-500'}`}>
-                    {c.last_message
-                      ? `${c.last_from_me ? 'You: ' : ''}${c.last_message}`
-                      : 'Say hello 👋'}
-                  </p>
-                  {c.unread > 0 && (
-                    <span className="bg-emerald-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center shrink-0">
-                      {c.unread}
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
+                    <span className="text-[11px] text-gray-400 shrink-0">{shortTime(g.last_message_at)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-1 pl-[2.625rem]">
+                    <p className={`text-xs truncate ${g.unread ? 'text-gray-800' : 'text-gray-500'}`}>
+                      {g.last_message
+                        ? `${g.last_from_me ? 'You' : g.last_sender.split(' ')[0]}: ${g.last_message}`
+                        : `${g.member_count} members`}
+                    </p>
+                    {g.unread > 0 && (
+                      <span className="bg-emerald-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center shrink-0">
+                        {g.unread}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Thread */}
+        {/* Right column */}
         <div className="md:col-span-2 bg-white border border-gray-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
-          {!userId ? (
+          {groupId ? (
+            <GroupChat key={groupId} groupId={groupId} onChanged={loadGroups} onGone={handleGroupGone} />
+          ) : !userId ? (
             <div className="flex-1 flex flex-col items-center justify-center text-sm text-gray-400">
               <div className="text-4xl mb-3">✉</div>
-              Select a conversation to start messaging.
+              Select a conversation or group to start messaging.
             </div>
           ) : (
             <>
@@ -245,8 +343,7 @@ export default function Messages() {
                 </div>
               </div>
 
-              <div ref={scrollRef} onScroll={onScroll}
-                className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/60">
+              <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/60">
                 {loadingThread && (
                   <div className="space-y-3 animate-pulse pt-2">
                     <div className="h-8 w-1/2 bg-gray-100 rounded-2xl" />
@@ -272,10 +369,12 @@ export default function Messages() {
                         const theirs = m.sender_id === userId
                         return (
                           <div key={m.id} className={`flex ${theirs ? 'justify-start' : 'justify-end'}`}>
-                            <div className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm shadow-sm
-                              ${theirs
-                                ? 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'
-                                : 'bg-emerald-600 text-white rounded-br-md'}`}>
+                            <div
+                              className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm shadow-sm
+                                ${theirs
+                                  ? 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'
+                                  : 'bg-emerald-600 text-white rounded-br-md'}`}
+                            >
                               <p className="whitespace-pre-wrap break-words">{m.content}</p>
                               <p className={`text-[10px] mt-1 text-right ${theirs ? 'text-gray-400' : 'text-emerald-200'}`}>
                                 {shortTime(m.created_at)}
@@ -289,9 +388,7 @@ export default function Messages() {
                 ))}
               </div>
 
-              {error && (
-                <div className="px-4 py-2 text-sm text-red-700 bg-red-50 border-t border-red-200">{error}</div>
-              )}
+              {error && <div className="px-4 py-2 text-sm text-red-700 bg-red-50 border-t border-red-200">{error}</div>}
 
               <form onSubmit={(e) => { e.preventDefault(); send() }} className="p-3 border-t border-gray-100 bg-white">
                 <div className="flex items-end gap-2">
@@ -305,8 +402,11 @@ export default function Messages() {
                     placeholder="Type a message…"
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-[120px]"
                   />
-                  <button type="submit" disabled={sending || !text.trim()}
-                    className="px-4 py-2.5 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors shrink-0">
+                  <button
+                    type="submit"
+                    disabled={sending || !text.trim()}
+                    className="px-4 py-2.5 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors shrink-0"
+                  >
                     {sending ? '…' : 'Send ➤'}
                   </button>
                 </div>
@@ -320,6 +420,18 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      {showNewGroup && (
+        <NewGroupModal
+          onClose={() => setShowNewGroup(false)}
+          onCreated={(g) => {
+            setShowNewGroup(false)
+            loadGroups()
+            setTab('groups')
+            navigate(`/messages/group/${g.id}`)
+          }}
+        />
+      )}
     </div>
   )
 }

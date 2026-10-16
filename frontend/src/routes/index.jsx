@@ -43,6 +43,7 @@ export default function AppRoutes() {
         <Route path="/directory" element={<Directory />} />
         <Route path="/network" element={<Network />} />
         <Route path="/messages" element={<Messages />} />
+        <Route path="/messages/group/:groupId" element={<Messages />} />
         <Route path="/messages/:userId" element={<Messages />} />
       </Route>
 
