@@ -55,6 +55,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     is_suspended = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, nullable=True)  # naive UTC; updated while connected and on disconnect
 
     profile = relationship("MemberProfile", back_populates="user",
                            uselist=False, cascade="all, delete-orphan")

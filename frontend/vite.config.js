@@ -6,7 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8001',
+      // ws: true lets the realtime WebSocket (/api/ws) pass through the dev proxy
+      '/api': { target: 'http://localhost:8001', ws: true, changeOrigin: true },
       '/uploads': 'http://localhost:8001',
     },
   },

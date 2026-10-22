@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import CallButtons from '../components/CallButtons'
+import { OnlineDot, StatusText } from '../components/OnlineDot'
 
 const errorMessage = (err) => {
   const detail = err.response?.data?.detail
@@ -36,7 +38,7 @@ function ProfileModal({ memberId, onClose, onMessage }) {
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
       onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6"
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85dvh] overflow-y-auto p-6"
         onClick={(e) => e.stopPropagation()}>
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
@@ -56,21 +58,25 @@ function ProfileModal({ memberId, onClose, onMessage }) {
         )}
         {p && (
           <>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-lg font-bold text-emerald-700">
-                  {initials(p.full_name)}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-lg font-bold text-emerald-700">
+                    {initials(p.full_name)}
+                  </div>
+                  <OnlineDot userId={p.id} className="h-3.5 w-3.5" />
                 </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">{p.full_name}</h2>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-gray-900 break-words">{p.full_name}</h2>
                   <p className="text-sm text-gray-500">{p.role || p.member_type}</p>
+                  <p className="text-xs"><StatusText userId={p.id} /></p>
                 </div>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
             </div>
 
-            <dl className="mt-5 text-sm grid grid-cols-2 gap-y-3 bg-slate-50 rounded-xl p-4">
-              {p.institution && (<><dt className="text-gray-500">Institution</dt><dd className="font-medium text-gray-900">{p.institution}</dd></>)}
+            <dl className="mt-5 text-sm grid grid-cols-2 gap-y-3 gap-x-2 bg-slate-50 rounded-xl p-4">
+              {p.institution && (<><dt className="text-gray-500">Institution</dt><dd className="font-medium text-gray-900 break-words">{p.institution}</dd></>)}
               {p.county && (<><dt className="text-gray-500">County</dt><dd className="font-medium text-gray-900">{p.county}</dd></>)}
               {p.experience_level && (<><dt className="text-gray-500">Experience</dt><dd className="font-medium text-gray-900">{p.experience_level}</dd></>)}
               {p.member_type && (<><dt className="text-gray-500">Member type</dt><dd className="font-medium text-gray-900">{p.member_type}</dd></>)}
@@ -109,10 +115,13 @@ function ProfileModal({ memberId, onClose, onMessage }) {
             </div>
 
             {p.connection_status === 'connected' && (
-              <button onClick={() => onMessage(p.id)}
-                className="mt-5 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
-                ✉ Send message
-              </button>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <button onClick={() => onMessage(p.id)}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+                  ✉ Send message
+                </button>
+                <CallButtons userId={p.id} name={p.full_name} />
+              </div>
             )}
           </>
         )}
@@ -181,7 +190,7 @@ export default function Network() {
     <div className="max-w-5xl mx-auto pb-16">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">My Network</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">My Network</h1>
           <p className="text-sm text-gray-500 mt-1">
             {connections.length} connection{connections.length === 1 ? '' : 's'}
             {requests.length > 0 && <span className="text-sky-700 font-medium"> · {requests.length} pending</span>}
@@ -191,9 +200,9 @@ export default function Network() {
       </div>
 
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
-          <button onClick={() => { setError(''); load() }} className="font-medium hover:underline">Dismiss</button>
+          <button onClick={() => { setError(''); load() }} className="font-medium hover:underline shrink-0">Dismiss</button>
         </div>
       )}
 
@@ -208,14 +217,14 @@ export default function Network() {
               const busy = busyId === r.user_id
               return (
                 <div key={r.connection_id}
-                  className="flex items-center justify-between bg-white border border-sky-100 rounded-xl px-4 py-2.5">
-                  <button onClick={() => setViewId(r.user_id)} className="text-left flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold">
+                  className="flex flex-wrap items-center justify-between gap-2 bg-white border border-sky-100 rounded-xl px-4 py-2.5">
+                  <button onClick={() => setViewId(r.user_id)} className="text-left flex items-center gap-3 min-w-0">
+                    <span className="w-8 h-8 shrink-0 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold">
                       {initials(r.full_name)}
                     </span>
-                    <span>
-                      <p className="font-medium text-sm text-gray-900 hover:underline">{r.full_name}</p>
-                      <p className="text-xs text-gray-500">{r.role}</p>
+                    <span className="min-w-0">
+                      <p className="font-medium text-sm text-gray-900 hover:underline truncate">{r.full_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{r.role}</p>
                     </span>
                   </button>
                   <div className="flex gap-2">
@@ -235,10 +244,10 @@ export default function Network() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="font-semibold text-gray-900">Connections ({visible.length})</h2>
         {connections.length > 4 && (
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Search connections…"
@@ -252,7 +261,7 @@ export default function Network() {
       </div>
 
       {loading && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
           {SKELETONS.map((_, i) => (
             <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5 animate-pulse">
               <div className="flex items-center gap-3">
@@ -272,7 +281,7 @@ export default function Network() {
       )}
 
       {!loading && connections.length === 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+        <div className="bg-white border border-gray-200 rounded-2xl p-8 sm:p-12 text-center">
           <div className="text-4xl mb-3">🤝</div>
           <p className="text-sm text-gray-500">
             You have no connections yet. Find people in the{' '}
@@ -293,7 +302,7 @@ export default function Network() {
       )}
 
       {!loading && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
           {visible.map((c) => {
             const busy = busyId === c.user_id
             const confirming = confirmId === c.user_id
@@ -302,14 +311,18 @@ export default function Network() {
                 className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <button onClick={() => setViewId(c.user_id)} className="text-left w-full group">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700">
-                      {initials(c.full_name)}
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700">
+                        {initials(c.full_name)}
+                      </div>
+                      <OnlineDot userId={c.user_id} />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate group-hover:text-emerald-700 transition-colors">
                         {c.full_name}
                       </p>
                       <p className="text-sm text-gray-500 truncate">{c.role || c.member_type}</p>
+                      <p className="text-xs truncate"><StatusText userId={c.user_id} /></p>
                     </div>
                   </div>
                 </button>
@@ -328,12 +341,15 @@ export default function Network() {
                     className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
                     ✉ Message
                   </button>
+                  <CallButtons userId={c.user_id} name={c.full_name} />
                   <button onClick={() => setViewId(c.user_id)}
                     className="px-3 py-1.5 text-sm rounded-lg border text-gray-700 hover:bg-gray-50 transition-colors">
-                    View profile
+                    Profile
                   </button>
+                </div>
+                <div className="mt-3 flex justify-end">
                   {confirming ? (
-                    <span className="ml-auto flex items-center gap-2">
+                    <span className="flex items-center gap-2">
                       <button disabled={busy} onClick={() => disconnect(c.user_id)}
                         className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50">
                         {busy ? 'Removing…' : 'Confirm'}
@@ -343,7 +359,7 @@ export default function Network() {
                     </span>
                   ) : (
                     <button disabled={busy} onClick={() => setConfirmId(c.user_id)}
-                      className="ml-auto text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
+                      className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
                       Disconnect
                     </button>
                   )}

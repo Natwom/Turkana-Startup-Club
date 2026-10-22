@@ -1,3 +1,42 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html {
+  /* Stop phones from inflating text on their own */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* 16px on normal phones; shrinks smoothly on narrow screens (or phones with a
+     large "Display size" setting) so everything, which is rem-based, still fits. */
+  font-size: clamp(14px, 3.6vw + 2px, 16px);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: clip;               /* never allow sideways scrolling */
+  overflow-wrap: break-word;      /* long words and links wrap instead of overflowing */
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a {
+  touch-action: manipulation;     /* no double-tap zoom delay */
+}
+
+/* iOS Safari zooms the whole page when a field smaller than 16px is focused */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

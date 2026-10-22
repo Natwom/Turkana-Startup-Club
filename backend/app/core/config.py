@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     SUPER_ADMIN_PASSWORD: str = "ChangeMe123!"
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Calls: TURN relay (needed for calls over mobile data). Leave empty in development.
+    # TURN_URLS is a comma-separated list, e.g. "turn:host:80,turns:host:443?transport=tcp"
+    TURN_URLS: str = ""
+    TURN_USERNAME: str = ""
+    TURN_CREDENTIAL: str = ""
+
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:

@@ -18,8 +18,9 @@ from app.api.hackathons.routes import router as hackathons_router
 from app.api.notifications.routes import router as notifications_router
 from app.api.admin.community import router as admin_community_router
 from app.api.messages.routes import router as messages_router
-from app.api.account.routes import router as account_router
 from app.api.groups.routes import router as groups_router
+from app.api.account.routes import router as account_router
+from app.api.realtime.routes import router as realtime_router
 
 app = FastAPI(title="Turkana Startup Club API", version="0.1.0")
 
@@ -34,10 +35,11 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(members_router)
 app.include_router(messages_router)
+app.include_router(groups_router)
+app.include_router(realtime_router)
 app.include_router(account_router)
 app.include_router(events_router)
 app.include_router(feed_router)
-app.include_router(groups_router)
 app.include_router(admin_manage_router)      # must come BEFORE admin_router
 app.include_router(admin_community_router)   # must come BEFORE admin_router
 app.include_router(admin_router)

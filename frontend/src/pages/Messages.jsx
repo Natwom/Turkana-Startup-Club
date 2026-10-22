@@ -3,11 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import api from '../services/api'
 import GroupChat from '../components/GroupChat'
 import NewGroupModal from '../components/NewGroupModal'
+import CallButtons from '../components/CallButtons'
+import { OnlineDot, StatusText } from '../components/OnlineDot'
 import { errorMessage, shortTime, dayLabel, initials } from '../components/chatUtils'
 
 export default function Messages() {
   const { userId, groupId } = useParams()
   const navigate = useNavigate()
+  const hasSelection = Boolean(userId || groupId)
 
   const [tab, setTab] = useState(groupId ? 'groups' : 'chats')
   const [conversations, setConversations] = useState([])
@@ -197,16 +200,17 @@ export default function Messages() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex items-end justify-between mb-4">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Messages</h1>
+      <div className="flex items-end justify-between mb-3 sm:mb-4">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Messages</h1>
         {(conversations.length > 0 || groups.length > 0) && (
           <span className="text-sm text-gray-500">{unreadChats + unreadGroups} unread</span>
         )}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 h-[72vh]">
+      {/* On phones only one panel shows at a time: the list, or the open chat. */}
+      <div className="grid md:grid-cols-3 gap-4 h-[calc(100dvh-10.5rem)] min-h-[26rem] md:h-[72vh]">
         {/* Left column */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col shadow-sm">
+        <div className={`${hasSelection ? 'hidden md:flex' : 'flex'} flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm min-h-0`}>
           <div className="flex border-b border-gray-100">
             {tabBtn('chats', 'Chats', unreadChats)}
             {tabBtn('groups', 'Groups', unreadGroups)}
@@ -256,8 +260,11 @@ export default function Messages() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
-                          {initials(c.full_name)}
+                        <span className="relative inline-flex shrink-0">
+                          <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                            {initials(c.full_name)}
+                          </span>
+                          <OnlineDot userId={c.user_id} className="h-2.5 w-2.5" />
                         </span>
                         <span className={`text-sm truncate ${c.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
                           {c.full_name}
@@ -323,27 +330,43 @@ export default function Messages() {
         </div>
 
         {/* Right column */}
-        <div className="md:col-span-2 bg-white border border-gray-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
+        <div className={`${hasSelection ? 'flex' : 'hidden md:flex'} md:col-span-2 flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm min-h-0`}>
+          {hasSelection && (
+            <div className="md:hidden px-3 py-2 border-b border-gray-100">
+              <button onClick={() => navigate('/messages')}
+                className="text-sm font-medium text-emerald-700 hover:underline">
+                ← Back
+              </button>
+            </div>
+          )}
+
           {groupId ? (
             <GroupChat key={groupId} groupId={groupId} onChanged={loadGroups} onGone={handleGroupGone} />
           ) : !userId ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-sm text-gray-400">
+            <div className="flex-1 flex flex-col items-center justify-center text-sm text-gray-400 px-4 text-center">
               <div className="text-4xl mb-3">✉</div>
               Select a conversation or group to start messaging.
             </div>
           ) : (
             <>
-              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-3">
-                <span className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold">
-                  {initials(thread.user?.full_name)}
+              <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+                <span className="relative inline-flex shrink-0">
+                  <span className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold">
+                    {initials(thread.user?.full_name)}
+                  </span>
+                  <OnlineDot userId={userId} />
                 </span>
-                <div>
-                  <p className="font-semibold text-gray-900">{thread.user?.full_name || '…'}</p>
-                  {thread.user?.role && <p className="text-xs text-gray-500">{thread.user.role}</p>}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900 truncate">{thread.user?.full_name || '…'}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    <StatusText userId={userId} />
+                    {thread.user?.role && <span> · {thread.user.role}</span>}
+                  </p>
                 </div>
+                <CallButtons userId={userId} name={thread.user?.full_name || 'this member'} />
               </div>
 
-              <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/60">
+              <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-gray-50/60">
                 {loadingThread && (
                   <div className="space-y-3 animate-pulse pt-2">
                     <div className="h-8 w-1/2 bg-gray-100 rounded-2xl" />
@@ -370,7 +393,7 @@ export default function Messages() {
                         return (
                           <div key={m.id} className={`flex ${theirs ? 'justify-start' : 'justify-end'}`}>
                             <div
-                              className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm shadow-sm
+                              className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm shadow-sm
                                 ${theirs
                                   ? 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'
                                   : 'bg-emerald-600 text-white rounded-br-md'}`}
@@ -400,7 +423,7 @@ export default function Messages() {
                     rows={1}
                     maxLength={2000}
                     placeholder="Type a message…"
-                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-[120px]"
+                    className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-[120px]"
                   />
                   <button
                     type="submit"

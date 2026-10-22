@@ -2,6 +2,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { RealtimeProvider, useRealtime } from '../context/RealtimeContext'
+import { CallProvider } from '../context/CallContext'
+import CallOverlay from '../components/CallOverlay'
 import Avatar from '../components/Avatar'
 import api from '../services/api'
 
@@ -92,7 +95,7 @@ function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border rounded-xl shadow-lg z-20 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white border rounded-xl shadow-lg z-20 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <span className="font-semibold text-sm">Notifications</span>
               {data.unread > 0 && (
@@ -113,8 +116,8 @@ function NotificationBell() {
                 <button key={n.id} onClick={() => clickItem(n)}
                   className={`w-full text-left px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 ${
                     n.is_read ? '' : 'bg-emerald-50/60'}`}>
-                  <p className={`text-sm ${n.is_read ? 'text-gray-700' : 'font-semibold text-gray-900'}`}>{n.title}</p>
-                  {n.body && <p className="text-xs text-gray-500 mt-0.5">{n.body}</p>}
+                  <p className={`text-sm break-words ${n.is_read ? 'text-gray-700' : 'font-semibold text-gray-900'}`}>{n.title}</p>
+                  {n.body && <p className="text-xs text-gray-500 mt-0.5 break-words">{n.body}</p>}
                   <p className="text-[11px] text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
                 </button>
               ))}
@@ -146,7 +149,7 @@ function UserMenu({ user, logout }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-56 bg-white border rounded-xl shadow-lg z-20 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] bg-white border rounded-xl shadow-lg z-20 overflow-hidden">
             <div className="px-4 py-3 border-b">
               <p className="text-sm font-semibold truncate">{user?.full_name}</p>
               {user?.email && <p className="text-xs text-gray-500 truncate">{user.email}</p>}
@@ -169,11 +172,13 @@ function UserMenu({ user, logout }) {
 }
 
 /* ------------------------------------------------------------------ layout */
-export default function AppLayout() {
+function Shell() {
   const { user, logout } = useAuth()
+  const { connected } = useRealtime()
   const location = useLocation()
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showReconnect, setShowReconnect] = useState(false)
 
   const loadUnread = useCallback(() => {
     api.get('/messages/unread-count').then((r) => setUnreadMessages(r.data.unread)).catch(() => {})
@@ -189,6 +194,16 @@ export default function AppLayout() {
     const t = setInterval(loadUnread, 30000)
     return () => clearInterval(t)
   }, [loadUnread])
+
+  // only show "Reconnecting" if the connection stays down for a few seconds
+  useEffect(() => {
+    if (connected) {
+      setShowReconnect(false)
+      return undefined
+    }
+    const t = setTimeout(() => setShowReconnect(true), 5000)
+    return () => clearTimeout(t)
+  }, [connected])
 
   const linkClass = ({ isActive }) =>
     `relative whitespace-nowrap px-3 py-1.5 rounded-lg text-sm transition-colors ${
@@ -206,8 +221,8 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
-          <NavLink to="/dashboard" className="font-bold text-xl text-emerald-700 shrink-0 mr-2">TSC</NavLink>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
+          <NavLink to="/dashboard" className="font-bold text-xl text-emerald-700 shrink-0 mr-1 sm:mr-2">TSC</NavLink>
 
           {/* desktop links */}
           <div className="hidden lg:flex items-center gap-1 flex-1">
@@ -233,7 +248,7 @@ export default function AppLayout() {
 
         {/* mobile links */}
         {menuOpen && (
-          <div className="lg:hidden border-t bg-white px-4 py-2 grid grid-cols-2 gap-1">
+          <div className="lg:hidden border-t bg-white px-3 sm:px-4 py-2 grid grid-cols-2 gap-1">
             {links.map(([label, to]) => (
               <NavLink key={to} to={to} className={linkClass}>
                 {label}
@@ -242,8 +257,25 @@ export default function AppLayout() {
             ))}
           </div>
         )}
+
+        {showReconnect && (
+          <div className="bg-amber-50 border-t border-amber-200 text-amber-800 text-xs text-center py-1">
+            Reconnecting… online status and calls are paused.
+          </div>
+        )}
       </nav>
-      <main className="max-w-7xl mx-auto px-4 py-6"><Outlet /></main>
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6"><Outlet /></main>
+      <CallOverlay />
     </div>
+  )
+}
+
+export default function AppLayout() {
+  return (
+    <RealtimeProvider>
+      <CallProvider>
+        <Shell />
+      </CallProvider>
+    </RealtimeProvider>
   )
 }

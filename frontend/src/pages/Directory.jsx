@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import CallButtons from '../components/CallButtons'
+import { OnlineDot, StatusText } from '../components/OnlineDot'
 
 const errorMessage = (err) => {
   const detail = err.response?.data?.detail
@@ -23,6 +26,7 @@ const initials = (name = '?') =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
 export default function Directory() {
+  const navigate = useNavigate()
   const [members, setMembers] = useState([])
   const [requests, setRequests] = useState([])
   const [q, setQ] = useState('')
@@ -142,19 +146,28 @@ export default function Directory() {
     switch (m.connection_status) {
       case 'connected':
         return (
-          <div className="mt-4 flex items-center gap-3">
-            <span className="px-4 py-1.5 text-sm rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
-              ✓ Connected
-            </span>
-            <button disabled={busy} onClick={() => cancel(m.id)}
-              className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
-              Disconnect
-            </button>
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => navigate(`/messages/${m.id}`)}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+                ✉ Message
+              </button>
+              <CallButtons userId={m.id} name={m.full_name} />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 text-xs rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                ✓ Connected
+              </span>
+              <button disabled={busy} onClick={() => cancel(m.id)}
+                className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
+                Disconnect
+              </button>
+            </div>
           </div>
         )
       case 'pending_sent':
         return (
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="px-4 py-1.5 text-sm rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
               Request sent
             </span>
@@ -166,7 +179,7 @@ export default function Directory() {
         )
       case 'pending_received':
         return (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <button disabled={busy} onClick={() => accept(m.id)}
               className="px-4 py-1.5 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors">
               Accept
@@ -192,7 +205,7 @@ export default function Directory() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Member Directory</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Member Directory</h1>
           <p className="text-sm text-gray-500 mt-1">
             {stats.total} members · {stats.connected} connections · {stats.pending} pending
           </p>
@@ -204,10 +217,10 @@ export default function Directory() {
       </div>
 
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
           <button onClick={() => { setError(''); loadMembers(); loadRequests() }}
-            className="font-medium hover:underline">Dismiss</button>
+            className="font-medium hover:underline shrink-0">Dismiss</button>
         </div>
       )}
 
@@ -225,14 +238,14 @@ export default function Directory() {
               const busy = busyId === r.user_id
               return (
                 <div key={r.connection_id}
-                  className="flex items-center justify-between bg-white border border-sky-100 rounded-xl px-4 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold">
+                  className="flex flex-wrap items-center justify-between gap-2 bg-white border border-sky-100 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold">
                       {initials(r.full_name)}
                     </div>
-                    <div>
-                      <p className="font-medium text-sm text-gray-900">{r.full_name}</p>
-                      <p className="text-xs text-gray-500">{r.role}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-gray-900 truncate">{r.full_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{r.role}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -254,10 +267,10 @@ export default function Directory() {
 
       {/* Controls */}
       <div className="flex flex-wrap gap-2 mb-3">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 min-w-[12rem]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">⌕</span>
           <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, skill, institution…  (Ctrl+K)"
+            placeholder="Search by name, skill, institution…"
             className="w-full border border-gray-200 rounded-lg pl-8 pr-8 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           {q && (
             <button onClick={() => setQ('')}
@@ -286,7 +299,7 @@ export default function Directory() {
 
       {/* Loading skeletons */}
       {loading && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
           {SKELETONS.map((_, i) => (
             <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5 animate-pulse">
               <div className="flex items-center gap-3">
@@ -323,7 +336,7 @@ export default function Directory() {
 
       {/* Member cards */}
       {!loading && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
           {visible.map((m) => {
             const [label, cls] = STATUS_LABELS[m.connection_status] || STATUS_LABELS.none
             return (
@@ -331,8 +344,11 @@ export default function Directory() {
                 className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col">
                 <button onClick={() => setSelected(m)} className="text-left group">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                      {initials(m.full_name)}
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                        {initials(m.full_name)}
+                      </div>
+                      <OnlineDot userId={m.id} />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate group-hover:text-emerald-700 transition-colors">
@@ -341,6 +357,7 @@ export default function Directory() {
                       <p className="text-sm text-gray-500 truncate">
                         {m.role || m.member_type}
                       </p>
+                      <p className="text-xs truncate"><StatusText userId={m.id} /></p>
                     </div>
                   </div>
                 </button>
@@ -374,17 +391,21 @@ export default function Directory() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
              onClick={() => setSelected(null)}>
           <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85dvh] overflow-y-auto p-6"
                onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setSelected(null)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold">
-                {initials(selected.full_name)}
+            <div className="flex items-center gap-4 pr-6">
+              <div className="relative shrink-0">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold">
+                  {initials(selected.full_name)}
+                </div>
+                <OnlineDot userId={selected.id} className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">{selected.full_name}</h3>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-gray-900 break-words">{selected.full_name}</h3>
                 <p className="text-sm text-gray-500">{selected.role || selected.member_type}</p>
+                <p className="text-xs"><StatusText userId={selected.id} /></p>
               </div>
             </div>
             <span className={`mt-4 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border
