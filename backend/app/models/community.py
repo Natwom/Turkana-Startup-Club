@@ -25,12 +25,18 @@ class Comment(Base):
     id = Column(String, primary_key=True, default=uid)
     post_id = Column(String, ForeignKey("posts.id", ondelete="CASCADE"), index=True)
     author_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    # NULL = top-level comment. Otherwise the id of the top-level comment this reply belongs to.
+    parent_id = Column(String, ForeignKey("comments.id", ondelete="CASCADE"),
+                       nullable=True, index=True)
     content = Column(Text, nullable=False)
     is_hidden = Column(String(1), default="0")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     post = relationship("Post", back_populates="comments")
     author = relationship("User")
+    # deleting a comment (from the app or from admin moderation) deletes its replies too
+    replies = relationship("Comment", back_populates="parent", cascade="all")
+    parent = relationship("Comment", back_populates="replies", remote_side=[id])
 
 
 class Reaction(Base):

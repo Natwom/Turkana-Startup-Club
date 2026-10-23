@@ -79,8 +79,10 @@ const TYPE_STYLES = {
 const REPORT_REASONS = ['Spam', 'Harassment', 'Misleading', 'Inappropriate content', 'Other']
 
 const MAX_CHARS = 500
+const MAX_COMMENT = 1000
 const PAGE_SIZE = 10
 const LONG_POST = 320
+const COLLAPSE_AFTER = 2 // threads with more replies than this start collapsed
 const LOAD_SKELETONS = Array.from({ length: 3 })
 
 // Server timestamps may be naive UTC (no "Z"); treat them as UTC so times are correct
@@ -109,6 +111,83 @@ const writeLS = (key, value) => {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage full or blocked */ }
 }
 
+const apiError = (err, fallback) => {
+  const detail = err?.response?.data?.detail
+  return typeof detail === 'string' ? detail : fallback
+}
+
+// a reply that is only an "@Name" mention has nothing to send
+const hasBody = (text) => text.replace(/^@\S+\s*/, '').trim().length > 0
+
+const countOf = (p) => p.comment_count ?? (p.comments?.length || 0)
+
+/* ------------------------------------------------------------------ comment pieces */
+function CommentRow({ c, isReply, onReply, onDelete }) {
+  return (
+    <div className="flex gap-2 text-sm">
+      <Avatar name={c.author} url={c.photo_url} size={isReply ? 'w-6 h-6' : 'w-7 h-7'} text="text-xs" />
+      <div className="min-w-0 flex-1">
+        <p className="text-gray-700 bg-slate-50 rounded-xl px-3 py-1.5 break-words">
+          <span className="font-semibold text-gray-900">{c.author}</span>{' '}
+          {c.content}
+        </p>
+        <div className="flex items-center gap-3 mt-0.5 pl-3 text-[11px] text-gray-400">
+          <span>{timeAgo(c.created_at)}</span>
+          <button type="button" onClick={() => onReply(c)}
+            className="font-medium hover:text-emerald-700">
+            Reply
+          </button>
+          {c.mine && (
+            <button type="button" onClick={() => onDelete(c)} className="hover:text-red-600">
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReplyBox({ name, value, onChange, onSend, onCancel, sending, className = '' }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+  }, [])
+
+  return (
+    <div className={`mt-2 ${className}`}>
+      <p className="text-[11px] text-gray-500 mb-1">
+        Replying to <span className="font-medium text-gray-700">{name}</span>
+        {' · '}
+        <button type="button" onClick={onCancel} className="hover:underline">Cancel</button>
+      </p>
+      <div className="flex gap-2">
+        <input
+          ref={ref}
+          value={value}
+          maxLength={MAX_COMMENT}
+          placeholder="Write a reply…"
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSend()
+            if (e.key === 'Escape') onCancel()
+          }}
+          className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <button type="button" onClick={onSend} disabled={!hasBody(value) || sending}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-40 transition-colors shrink-0">
+          <Icon name="send" className="h-4 w-4" />
+          {sending ? '…' : 'Reply'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ page */
 export default function Community() {
   const { user } = useAuth()
@@ -130,6 +209,12 @@ export default function Community() {
   const [expanded, setExpanded] = useState({})
   const [sendingId, setSendingId] = useState(null)
   const [saved, setSaved] = useState(() => readLS('community:saved', []))
+
+  // replies
+  const [replying, setReplying] = useState(null) // { postId, targetId, name }
+  const [replyText, setReplyText] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
+  const [openReplies, setOpenReplies] = useState({}) // threadId -> true when expanded
 
   // feed controls
   const [activeType, setActiveType] = useState('all')
@@ -210,11 +295,13 @@ export default function Community() {
       if (!q) return true
       return (p.content || '').toLowerCase().includes(q)
         || (p.author?.name || '').toLowerCase().includes(q)
-        || (p.comments || []).some((c) => (c.content || '').toLowerCase().includes(q))
+        || (p.comments || []).some((c) =>
+          (c.content || '').toLowerCase().includes(q)
+          || (c.replies || []).some((r) => (r.content || '').toLowerCase().includes(q)))
     })
     return [...list].sort((a, b) => {
       if (sort === 'top') return (b.likes || 0) - (a.likes || 0)
-      if (sort === 'discussed') return (b.comments?.length || 0) - (a.comments?.length || 0)
+      if (sort === 'discussed') return countOf(b) - countOf(a)
       return (parseDate(b.created_at) || 0) - (parseDate(a.created_at) || 0)
     })
   }, [posts, activeType, query, sort, saved])
@@ -273,10 +360,59 @@ export default function Community() {
       setDrafts((d) => ({ ...d, [id]: '' }))
       setOpenComments((o) => ({ ...o, [id]: true }))
       await load(true)
-    } catch {
-      showToast('Your comment could not be sent.', 'error')
+    } catch (err) {
+      showToast(apiError(err, 'Your comment could not be sent.'), 'error')
     } finally {
       setSendingId(null)
+    }
+  }
+
+  // ---- replies
+  const startReply = (post, target, threadId) => {
+    const isReplyToReply = target.id !== threadId
+    setReplying({ postId: post.id, targetId: target.id, name: target.author })
+    setReplyText(isReplyToReply ? `@${(target.author || '').split(' ')[0]} ` : '')
+    setOpenReplies((o) => ({ ...o, [threadId]: true }))
+    setOpenComments((o) => ({ ...o, [post.id]: true }))
+  }
+
+  const cancelReply = () => {
+    setReplying(null)
+    setReplyText('')
+  }
+
+  const sendReply = async (threadId) => {
+    if (!replying || sendingReply) return
+    const text = replyText.trim()
+    if (!hasBody(text)) return
+    setSendingReply(true)
+    try {
+      await api.post(`/feed/${replying.postId}/comments`, null, {
+        params: { content: text, parent_id: replying.targetId },
+      })
+      setOpenReplies((o) => ({ ...o, [threadId]: true }))
+      cancelReply()
+      await load(true)
+    } catch (err) {
+      showToast(apiError(err, 'Your reply could not be sent.'), 'error')
+    } finally {
+      setSendingReply(false)
+    }
+  }
+
+  const deleteComment = async (post, c) => {
+    const n = c.replies?.length || 0
+    const message = n
+      ? `Delete this comment and its ${n} ${n === 1 ? 'reply' : 'replies'}?`
+      : 'Delete this comment?'
+    if (!window.confirm(message)) return
+    try {
+      await api.delete(`/feed/${post.id}/comments/${c.id}`)
+      cancelReply()
+      await load(true)
+      showToast('Deleted')
+    } catch (err) {
+      showToast(apiError(err, 'Could not delete this comment.'), 'error')
     }
   }
 
@@ -320,7 +456,7 @@ export default function Community() {
       {/* header */}
       <div className="flex items-end justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Community</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Community</h1>
           <p className="text-sm text-gray-500 mt-1">
             {counts.all} {counts.all === 1 ? 'post' : 'posts'} from members
             {refreshing && <span className="ml-2 text-emerald-600">Updating…</span>}
@@ -343,7 +479,7 @@ export default function Community() {
             onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') publish(e) }}
             rows={3}
             placeholder="Share an update, ask a question or post an opportunity…"
-            className="flex-1 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+            className="flex-1 min-w-0 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
           />
         </div>
 
@@ -376,10 +512,10 @@ export default function Community() {
 
       {/* search + sort */}
       <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Icon name="search" className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search posts, people, comments…  (Ctrl+K)"
+            placeholder="Search posts, people, comments…"
             className="w-full border border-gray-200 rounded-lg pl-9 pr-9 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear search"
@@ -461,7 +597,8 @@ export default function Community() {
       {/* feed */}
       <div className="space-y-4">
         {shown.map((p) => {
-          const open = openComments[p.id] ?? (p.comments?.length > 0)
+          const total = countOf(p)
+          const open = openComments[p.id] ?? (total > 0)
           const text = p.content || ''
           const isLong = text.length > LONG_POST
           const isExpanded = expanded[p.id]
@@ -500,7 +637,7 @@ export default function Community() {
               )}
 
               {/* actions */}
-              <div className="flex items-center gap-1 mt-4 -mx-2 text-sm">
+              <div className="flex flex-wrap items-center gap-1 mt-4 -mx-2 text-sm">
                 <button onClick={() => like(p.id)} aria-pressed={Boolean(p.liked_by_me)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors ${
                     p.liked_by_me
@@ -513,7 +650,7 @@ export default function Community() {
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors ${
                     open ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 hover:text-emerald-700 hover:bg-gray-50'}`}>
                   <Icon name="chat" />
-                  {p.comments?.length || 0}
+                  {total}
                 </button>
                 <button onClick={() => toggleSave(p.id)} title={isSaved ? 'Remove from saved' : 'Save for later'}
                   aria-pressed={isSaved}
@@ -532,31 +669,79 @@ export default function Community() {
                 </button>
               </div>
 
-              {/* comments */}
+              {/* comments + replies */}
               {open && (
                 <div className="mt-3 border-t border-gray-100 pt-3">
                   {p.comments?.length > 0 && (
-                    <div className="space-y-2.5 mb-3">
-                      {p.comments.map((c) => (
-                        <div key={c.id} className="flex gap-2 text-sm">
-                          <Avatar name={c.author} size="w-7 h-7" text="text-xs" />
-                          <p className="text-gray-700 bg-slate-50 rounded-xl px-3 py-1.5 break-words min-w-0">
-                            <span className="font-semibold text-gray-900">{c.author}</span>{' '}
-                            {c.content}
-                          </p>
-                        </div>
-                      ))}
+                    <div className="space-y-3 mb-3">
+                      {p.comments.map((c) => {
+                        const replies = c.replies || []
+                        const collapsed = replies.length > COLLAPSE_AFTER && !openReplies[c.id]
+                        const label = `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`
+
+                        return (
+                          <div key={c.id}>
+                            <CommentRow c={c}
+                              onReply={(target) => startReply(p, target, c.id)}
+                              onDelete={(target) => deleteComment(p, target)} />
+
+                            {replying?.targetId === c.id && (
+                              <ReplyBox className="pl-9" name={replying.name}
+                                value={replyText} onChange={setReplyText}
+                                onSend={() => sendReply(c.id)} onCancel={cancelReply}
+                                sending={sendingReply} />
+                            )}
+
+                            {replies.length > 0 && (
+                              <div className="ml-9 mt-2 pl-3 border-l-2 border-gray-100 space-y-2">
+                                {collapsed ? (
+                                  <button type="button"
+                                    onClick={() => setOpenReplies((o) => ({ ...o, [c.id]: true }))}
+                                    className="text-xs font-medium text-emerald-700 hover:underline">
+                                    View {label}
+                                  </button>
+                                ) : (
+                                  <>
+                                    {replies.map((r) => (
+                                      <div key={r.id}>
+                                        <CommentRow c={r} isReply
+                                          onReply={(target) => startReply(p, target, c.id)}
+                                          onDelete={(target) => deleteComment(p, target)} />
+                                        {replying?.targetId === r.id && (
+                                          <ReplyBox className="pl-8" name={replying.name}
+                                            value={replyText} onChange={setReplyText}
+                                            onSend={() => sendReply(c.id)} onCancel={cancelReply}
+                                            sending={sendingReply} />
+                                        )}
+                                      </div>
+                                    ))}
+                                    {replies.length > COLLAPSE_AFTER && (
+                                      <button type="button"
+                                        onClick={() => setOpenReplies((o) => ({ ...o, [c.id]: false }))}
+                                        className="text-xs font-medium text-gray-400 hover:text-gray-600">
+                                        Hide replies
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
+
                   <div className="flex gap-2">
                     <input value={drafts[p.id] || ''}
                       placeholder="Write a comment…"
+                      maxLength={MAX_COMMENT}
                       onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
                       onKeyDown={(e) => e.key === 'Enter' && comment(p.id)}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                      className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                     <button onClick={() => comment(p.id)}
                       disabled={!(drafts[p.id] || '').trim() || sendingId === p.id}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-40 transition-colors">
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-40 transition-colors shrink-0">
                       <Icon name="send" className="h-4 w-4" />
                       {sendingId === p.id ? 'Sending…' : 'Send'}
                     </button>
@@ -627,9 +812,9 @@ export default function Community() {
       {/* toast */}
       {toast && (
         <div role="status"
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm text-white ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100vw-1.5rem)] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm text-white ${
             toast.kind === 'error' ? 'bg-red-600' : 'bg-gray-900'}`}>
-          <Icon name={toast.kind === 'error' ? 'alert' : 'check'} className="h-4 w-4" />
+          <Icon name={toast.kind === 'error' ? 'alert' : 'check'} className="h-4 w-4 shrink-0" />
           {toast.message}
         </div>
       )}
