@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (Column, String, Text, Boolean, DateTime, ForeignKey, Table, JSON)
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import expression
 
 from app.db.base import Base
 
@@ -52,7 +53,10 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(200), nullable=False)
     phone = Column(String(30), default="")
-    is_verified = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)       # account / email verification
+    # Blue-tick badge, awarded automatically at AUTO_VERIFY_CONNECTIONS connections
+    is_badge_verified = Column(Boolean, default=False, nullable=False,
+                               server_default=expression.false())
     is_suspended = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, nullable=True)  # naive UTC; updated while connected and on disconnect

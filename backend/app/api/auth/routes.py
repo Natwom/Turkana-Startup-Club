@@ -30,7 +30,9 @@ def _profile_dict(p: MemberProfile) -> dict:
 def _user_out(u: User) -> dict:
     return {
         "id": u.id, "email": u.email, "full_name": u.full_name, "phone": u.phone,
-        "is_verified": u.is_verified, "roles": u.role_names(),
+        "is_verified": u.is_verified,
+        "is_badge_verified": bool(u.is_badge_verified),
+        "roles": u.role_names(),
         "profile": _profile_dict(u.profile) if u.profile else None,
     }
 

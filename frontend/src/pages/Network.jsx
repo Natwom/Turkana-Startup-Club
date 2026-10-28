@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import CallButtons from '../components/CallButtons'
+import VerifiedBadge from '../components/VerifiedBadge'
 import { OnlineDot, StatusText } from '../components/OnlineDot'
+
+// Keep in sync with AUTO_VERIFY_CONNECTIONS on the backend
+const VERIFY_AT = 10
 
 const errorMessage = (err) => {
   const detail = err.response?.data?.detail
@@ -67,7 +71,10 @@ function ProfileModal({ memberId, onClose, onMessage }) {
                   <OnlineDot userId={p.id} className="h-3.5 w-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-gray-900 break-words">{p.full_name}</h2>
+                  <h2 className="text-lg font-bold text-gray-900 break-words">
+                    {p.full_name}
+                    {p.is_badge_verified && <span className="ml-1.5"><VerifiedBadge className="h-5 w-5" /></span>}
+                  </h2>
                   <p className="text-sm text-gray-500">{p.role || p.member_type}</p>
                   <p className="text-xs"><StatusText userId={p.id} /></p>
                 </div>
@@ -134,6 +141,7 @@ export default function Network() {
   const navigate = useNavigate()
   const [connections, setConnections] = useState([])
   const [requests, setRequests] = useState([])
+  const [hasBadge, setHasBadge] = useState(null) // null = unknown yet
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
   const [viewId, setViewId] = useState(null)
@@ -143,12 +151,14 @@ export default function Network() {
 
   const load = useCallback(async () => {
     try {
-      const [c, r] = await Promise.all([
+      const [c, r, me] = await Promise.all([
         api.get('/members/connections'),
         api.get('/members/connections/requests'),
+        api.get('/auth/me').catch(() => null), // only used for the badge banner
       ])
       setConnections(Array.isArray(c.data) ? c.data : [])
       setRequests(Array.isArray(r.data) ? r.data : [])
+      if (me?.data) setHasBadge(!!me.data.is_badge_verified)
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -186,6 +196,9 @@ export default function Network() {
       || (c.skills || []).some((s) => s.toLowerCase().includes(needle)))
   }, [connections, query])
 
+  const remaining = Math.max(0, VERIFY_AT - connections.length)
+  const progress = Math.min(100, Math.round((connections.length / VERIFY_AT) * 100))
+
   return (
     <div className="max-w-5xl mx-auto pb-16">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
@@ -206,6 +219,29 @@ export default function Network() {
         </div>
       )}
 
+      {hasBadge === true && (
+        <div className="mb-6 flex items-center gap-2 bg-sky-50 border border-sky-200 text-sky-800 text-sm rounded-xl px-4 py-3">
+          <VerifiedBadge className="h-5 w-5" />
+          <span>You have the verified badge. It shows next to your name across the platform.</span>
+        </div>
+      )}
+
+      {hasBadge === false && (
+        <div className="mb-6 bg-sky-50/60 border border-sky-200 rounded-2xl px-4 py-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <p className="font-medium text-gray-900">
+              {remaining > 0
+                ? `Connect with ${remaining} more member${remaining === 1 ? '' : 's'} to earn your verified badge`
+                : 'You qualify for the verified badge. Refresh in a moment.'}
+            </p>
+            <span className="text-xs text-gray-500 shrink-0">{Math.min(connections.length, VERIFY_AT)}/{VERIFY_AT}</span>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-sky-100 overflow-hidden">
+            <div className="h-full bg-sky-500 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+
       {requests.length > 0 && (
         <div className="mb-6 bg-sky-50/50 border border-sky-200 rounded-2xl p-4">
           <h2 className="font-semibold text-gray-900 mb-3">
@@ -223,7 +259,10 @@ export default function Network() {
                       {initials(r.full_name)}
                     </span>
                     <span className="min-w-0">
-                      <p className="font-medium text-sm text-gray-900 hover:underline truncate">{r.full_name}</p>
+                      <p className="font-medium text-sm text-gray-900 hover:underline truncate">
+                        {r.full_name}
+                        {r.is_badge_verified && <span className="ml-1"><VerifiedBadge className="h-3.5 w-3.5" /></span>}
+                      </p>
                       <p className="text-xs text-gray-500 truncate">{r.role}</p>
                     </span>
                   </button>
@@ -320,6 +359,7 @@ export default function Network() {
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate group-hover:text-emerald-700 transition-colors">
                         {c.full_name}
+                        {c.is_badge_verified && <span className="ml-1"><VerifiedBadge /></span>}
                       </p>
                       <p className="text-sm text-gray-500 truncate">{c.role || c.member_type}</p>
                       <p className="text-xs truncate"><StatusText userId={c.user_id} /></p>

@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models import Connection, MemberProfile, Skill, User
 from app.schemas.member import ProfileUpdate
 from app.services.notifications import notify
+from app.services.verification import auto_verify_users
 
 router = APIRouter(prefix="/api/members", tags=["members"])
 
@@ -75,6 +76,7 @@ def directory(q: str = "", member_type: str = "", county: str = "", chapter_id: 
     return [
         {
             "id": u.id, "full_name": u.full_name,
+            "is_badge_verified": bool(u.is_badge_verified),
             "photo_url": u.profile.photo_url if u.profile else "",
             "role": u.profile.professional_role if u.profile else "",
             "member_type": u.profile.member_type if u.profile else "",
@@ -119,6 +121,7 @@ def my_connections(db: Session = Depends(get_db), user: User = Depends(get_curre
         out.append({
             "connection_id": c.id, "user_id": other_id,
             "full_name": other.full_name,
+            "is_badge_verified": bool(other.is_badge_verified),
             "role": other.profile.professional_role if other.profile else "",
             "member_type": other.profile.member_type if other.profile else "",
             "skills": [s.name for s in other.profile.skills] if other.profile else [],
@@ -138,6 +141,7 @@ def incoming_requests(db: Session = Depends(get_db), user: User = Depends(get_cu
             continue
         out.append({"connection_id": c.id, "user_id": other.id,
                     "full_name": other.full_name,
+                    "is_badge_verified": bool(other.is_badge_verified),
                     "role": other.profile.professional_role if other.profile else ""})
     return out
 
@@ -166,6 +170,8 @@ def connect(user_id: str, db: Session = Depends(get_db),
             db.commit()
             notify(db, user_id, f"{user.full_name} accepted your connection request",
                    ntype="connection", link="/network")
+            # both sides just gained a connection: check both for the badge
+            auto_verify_users(db, user.id, user_id)
             return {"message": "Connection accepted", "status": "connected"}
 
         # rejected / removed: reuse the same row (the unique constraint forbids a duplicate)
@@ -197,6 +203,8 @@ def accept_connection(user_id: str, db: Session = Depends(get_db),
     db.commit()
     notify(db, user_id, f"{user.full_name} accepted your connection request",
            ntype="connection", link="/network")
+    # both sides just gained a connection: check both for the badge
+    auto_verify_users(db, user.id, user_id)
     return {"message": "Connection accepted", "status": "connected"}
 
 
@@ -248,6 +256,7 @@ def member_profile(user_id: str, db: Session = Depends(get_db),
     data = {
         "id": other.id,
         "full_name": other.full_name,
+        "is_badge_verified": bool(other.is_badge_verified),
         "photo_url": p.photo_url if p else "",
         "role": p.professional_role if p else "",
         "member_type": p.member_type if p else "",
