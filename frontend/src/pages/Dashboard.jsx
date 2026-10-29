@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Avatar from '../components/Avatar'
+import VerifiedBadge from '../components/VerifiedBadge'
 
 /* ------------------------------------------------------------------ icons */
 const ICONS = {
@@ -272,6 +273,8 @@ export default function Dashboard() {
   /* ---- derived data */
   const profile = user?.profile || {}
   const firstName = user?.full_name?.split(' ')[0] || 'there'
+  const hasBadge = Boolean(user?.is_badge_verified)
+  const isVerified = hasBadge || Boolean(user?.is_verified)
 
   const checks = useMemo(() => PROFILE_CHECKS.map(([key, label]) => {
     const v = profile[key]
@@ -364,7 +367,10 @@ export default function Dashboard() {
               <p className="text-emerald-100 text-sm">
                 {greeting()} · {new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
-              <h1 className="text-2xl md:text-3xl font-bold truncate">Karibu, {firstName}</h1>
+              <h1 className="flex items-center gap-2 min-w-0 text-2xl md:text-3xl font-bold">
+                <span className="truncate">Karibu, {firstName}</span>
+                {hasBadge && <VerifiedBadge className="h-6 w-6 md:h-7 md:w-7" />}
+              </h1>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {(profile.professional_role || profile.member_type) && (
                   <span className="text-xs bg-white/15 rounded-full px-3 py-1">
@@ -372,8 +378,8 @@ export default function Dashboard() {
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1.5 text-xs bg-white/15 rounded-full px-3 py-1">
-                  <Icon name={user?.is_verified ? 'checkCircle' : 'clock'} className="h-3.5 w-3.5" />
-                  {user?.is_verified ? 'Verified member' : 'Pending verification'}
+                  <Icon name={isVerified ? 'checkCircle' : 'clock'} className="h-3.5 w-3.5" />
+                  {isVerified ? 'Verified member' : 'Pending verification'}
                 </span>
               </div>
             </div>
@@ -392,10 +398,13 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {!user?.is_verified && (
+      {!isVerified && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
           <Icon name="clock" className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>Your account is pending verification. You can use the community while an admin reviews it.</span>
+          <span>
+            Your account is not verified yet. Reach 10 connections to earn your verified badge automatically.
+            You can use the community in the meantime.
+          </span>
         </div>
       )}
 
@@ -492,7 +501,10 @@ export default function Dashboard() {
                     <li key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                       <Avatar name={toText(m.full_name)} url={toText(m.photo_url)} size="w-11 h-11" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate">{toText(m.full_name)}</p>
+                        <p className="flex items-center gap-1 font-medium text-gray-900 min-w-0">
+                          <span className="truncate">{toText(m.full_name)}</span>
+                          {m.is_badge_verified && <VerifiedBadge className="h-4 w-4" />}
+                        </p>
                         <p className="text-sm text-gray-500 truncate">{toText(m.role || m.member_type)}</p>
                         {m.shared > 0 && (
                           <p className="text-xs text-emerald-700 mt-0.5">
@@ -553,7 +565,10 @@ export default function Dashboard() {
                   <li key={r.connection_id ?? r.user_id} className="flex items-center gap-3">
                     <Avatar name={toText(r.full_name)} size="w-10 h-10" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{toText(r.full_name)}</p>
+                      <p className="flex items-center gap-1 text-sm font-medium min-w-0">
+                        <span className="truncate">{toText(r.full_name)}</span>
+                        {r.is_badge_verified && <VerifiedBadge className="h-3.5 w-3.5" />}
+                      </p>
                       <p className="text-xs text-gray-500 truncate">{toText(r.role)}</p>
                     </div>
                     <div className="flex gap-1.5">
@@ -584,7 +599,10 @@ export default function Dashboard() {
                       className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-gray-50">
                       <Avatar name={toText(c.full_name)} size="w-10 h-10" />
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm truncate ${c.unread ? 'font-bold' : 'font-medium'}`}>{toText(c.full_name)}</p>
+                        <p className={`flex items-center gap-1 text-sm min-w-0 ${c.unread ? 'font-bold' : 'font-medium'}`}>
+                          <span className="truncate">{toText(c.full_name)}</span>
+                          {c.is_badge_verified && <VerifiedBadge className="h-3.5 w-3.5" />}
+                        </p>
                         <p className="text-xs text-gray-500 truncate">
                           {c.last_message ? `${c.last_from_me ? 'You: ' : ''}${toText(c.last_message)}` : 'Say hello'}
                         </p>
