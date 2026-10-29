@@ -116,6 +116,7 @@ def _msg(m: ChatGroupMessage) -> dict:
         "id": m.id,
         "sender_id": m.sender_id,
         "sender_name": m.sender.full_name if m.sender else "Former member",
+        "sender_badge": bool(m.sender and m.sender.is_badge_verified),
         "content": m.content,
         "created_at": _iso(m.created_at),
     }
@@ -206,6 +207,7 @@ def group_detail(group_id: str, db: Session = Depends(get_db),
         "members": [{
             "user_id": m.user_id,
             "full_name": m.user.full_name if m.user else "Former member",
+            "is_badge_verified": bool(m.user and m.user.is_badge_verified),
             "role": m.user.profile.professional_role if m.user and m.user.profile else "",
             "group_role": m.role,
         } for m in members],

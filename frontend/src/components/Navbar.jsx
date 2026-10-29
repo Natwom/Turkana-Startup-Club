@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import VerifiedBadge from './VerifiedBadge'
 
 const LINKS = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -40,7 +41,10 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
-              <span className="text-sm text-gray-600">{user.full_name}</span>
+              <span className="flex items-center gap-1 text-sm text-gray-600">
+                {user.full_name}
+                {user.is_badge_verified && <VerifiedBadge className="h-4 w-4" />}
+              </span>
               <button onClick={logout}
                 className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50">
                 Logout
@@ -68,6 +72,10 @@ export default function Navbar() {
         <div className="md:hidden border-t bg-white px-4 py-3 flex flex-col gap-1">
           {user ? (
             <>
+              <p className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-800">
+                {user.full_name}
+                {user.is_badge_verified && <VerifiedBadge className="h-4 w-4" />}
+              </p>
               {LINKS.map((l) => (
                 <NavLink key={l.to} to={l.to} className={linkCls} onClick={() => setOpen(false)}>
                   {l.label}

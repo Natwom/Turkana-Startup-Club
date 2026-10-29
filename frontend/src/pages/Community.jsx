@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Avatar from '../components/Avatar'
+import VerifiedBadge from '../components/VerifiedBadge'
 
 /* ------------------------------------------------------------------ icons */
 const ICONS = {
@@ -128,7 +129,9 @@ function CommentRow({ c, isReply, onReply, onDelete }) {
       <Avatar name={c.author} url={c.photo_url} size={isReply ? 'w-6 h-6' : 'w-7 h-7'} text="text-xs" />
       <div className="min-w-0 flex-1">
         <p className="text-gray-700 bg-slate-50 rounded-xl px-3 py-1.5 break-words">
-          <span className="font-semibold text-gray-900">{c.author}</span>{' '}
+          <span className="font-semibold text-gray-900">{c.author}</span>
+          {c.is_badge_verified && <span className="ml-1"><VerifiedBadge className="h-3.5 w-3.5" /></span>}
+          {' '}
           {c.content}
         </p>
         <div className="flex items-center gap-3 mt-0.5 pl-3 text-[11px] text-gray-400">
@@ -612,7 +615,10 @@ export default function Community() {
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar name={p.author?.name} url={p.author?.photo_url} size="w-10 h-10" />
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 leading-tight truncate">{p.author?.name}</p>
+                    <p className="font-semibold text-gray-900 leading-tight truncate">
+                      {p.author?.name}
+                      {p.author?.is_badge_verified && <span className="ml-1"><VerifiedBadge /></span>}
+                    </p>
                     <p className="text-xs text-gray-400" title={when ? when.toLocaleString() : ''}>
                       {timeAgo(p.created_at)}
                     </p>

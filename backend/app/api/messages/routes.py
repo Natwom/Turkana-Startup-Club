@@ -90,6 +90,7 @@ def conversations(db: Session = Depends(get_db), user: User = Depends(get_curren
         out.append({
             "user_id": other_id,
             "full_name": other.full_name,
+            "is_badge_verified": bool(other.is_badge_verified),
             "role": other.profile.professional_role if other.profile else "",
             "last_message": last.content if last else "",
             "last_message_at": _iso(last.created_at) if last else None,
@@ -124,6 +125,7 @@ def thread(user_id: str, db: Session = Depends(get_db),
 
     return {
         "user": {"id": other.id, "full_name": other.full_name,
+                 "is_badge_verified": bool(other.is_badge_verified),
                  "role": other.profile.professional_role if other.profile else ""},
         "messages": [_serialize(m) for m in msgs],
     }

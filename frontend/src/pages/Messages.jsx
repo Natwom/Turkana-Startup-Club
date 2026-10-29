@@ -4,6 +4,7 @@ import api from '../services/api'
 import GroupChat from '../components/GroupChat'
 import NewGroupModal from '../components/NewGroupModal'
 import CallButtons from '../components/CallButtons'
+import VerifiedBadge from '../components/VerifiedBadge'
 import { OnlineDot, StatusText } from '../components/OnlineDot'
 import { errorMessage, shortTime, dayLabel, initials } from '../components/chatUtils'
 
@@ -63,6 +64,7 @@ export default function Messages() {
         const nextLast = r.data.messages?.[r.data.messages.length - 1]?.id
         const same =
           prev.user?.full_name === r.data.user?.full_name &&
+          prev.user?.is_badge_verified === r.data.user?.is_badge_verified &&
           prev.messages.length === (r.data.messages?.length || 0) &&
           prevLast === nextLast
         return same ? prev : r.data
@@ -266,8 +268,9 @@ export default function Messages() {
                           </span>
                           <OnlineDot userId={c.user_id} className="h-2.5 w-2.5" />
                         </span>
-                        <span className={`text-sm truncate ${c.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
-                          {c.full_name}
+                        <span className={`flex items-center gap-1 min-w-0 text-sm ${c.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                          <span className="truncate">{c.full_name}</span>
+                          {c.is_badge_verified && <VerifiedBadge className="h-3.5 w-3.5" />}
                         </span>
                       </span>
                       <span className="text-[11px] text-gray-400 shrink-0">{shortTime(c.last_message_at)}</span>
@@ -357,7 +360,10 @@ export default function Messages() {
                   <OnlineDot userId={userId} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 truncate">{thread.user?.full_name || '…'}</p>
+                  <p className="flex items-center gap-1 font-semibold text-gray-900 min-w-0">
+                    <span className="truncate">{thread.user?.full_name || '…'}</span>
+                    {thread.user?.is_badge_verified && <VerifiedBadge className="h-4 w-4" />}
+                  </p>
                   <p className="text-xs text-gray-500 truncate">
                     <StatusText userId={userId} />
                     {thread.user?.role && <span> · {thread.user.role}</span>}

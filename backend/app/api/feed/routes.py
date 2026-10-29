@@ -14,12 +14,17 @@ def _photo(u: User) -> str:
     return u.profile.photo_url if u and u.profile else ""
 
 
+def _badge(u: User) -> bool:
+    return bool(u and u.is_badge_verified)
+
+
 def _comment_out(c: Comment, me: User) -> dict:
     return {
         "id": c.id,
         "content": c.content,
         "author": c.author.full_name if c.author else "Former member",
         "author_id": c.author_id,
+        "is_badge_verified": _badge(c.author),
         "photo_url": _photo(c.author),
         "created_at": c.created_at,
         "mine": c.author_id == me.id,
@@ -54,6 +59,7 @@ def feed(limit: int = 30, db: Session = Depends(get_db), user: User = Depends(ge
             "id": p.id, "content": p.content, "post_type": p.post_type,
             "image_url": p.image_url, "created_at": p.created_at,
             "author": {"id": p.author.id, "name": p.author.full_name,
+                       "is_badge_verified": _badge(p.author),
                        "photo": _photo(p.author), "photo_url": _photo(p.author)},
             "likes": len(p.reactions),
             "liked_by_me": any(r.user_id == user.id for r in p.reactions),

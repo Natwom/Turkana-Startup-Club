@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import CallButtons from '../components/CallButtons'
+import VerifiedBadge from '../components/VerifiedBadge'
 import { OnlineDot, StatusText } from '../components/OnlineDot'
 
 const errorMessage = (err) => {
@@ -244,7 +245,10 @@ export default function Directory() {
                       {initials(r.full_name)}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-sm text-gray-900 truncate">{r.full_name}</p>
+                      <p className="flex items-center gap-1 font-medium text-sm text-gray-900 min-w-0">
+                        <span className="truncate">{r.full_name}</span>
+                        {r.is_badge_verified && <VerifiedBadge className="h-3.5 w-3.5" />}
+                      </p>
                       <p className="text-xs text-gray-500 truncate">{r.role}</p>
                     </div>
                   </div>
@@ -351,8 +355,9 @@ export default function Directory() {
                       <OnlineDot userId={m.id} />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate group-hover:text-emerald-700 transition-colors">
-                        {highlight(m.full_name)}
+                      <p className="flex items-center gap-1 font-semibold text-gray-900 group-hover:text-emerald-700 transition-colors min-w-0">
+                        <span className="truncate">{highlight(m.full_name)}</span>
+                        {m.is_badge_verified && <VerifiedBadge />}
                       </p>
                       <p className="text-sm text-gray-500 truncate">
                         {m.role || m.member_type}
@@ -403,7 +408,10 @@ export default function Directory() {
                 <OnlineDot userId={selected.id} className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-gray-900 break-words">{selected.full_name}</h3>
+                <h3 className="text-lg font-bold text-gray-900 break-words">
+                  {selected.full_name}
+                  {selected.is_badge_verified && <span className="ml-1.5"><VerifiedBadge className="h-5 w-5" /></span>}
+                </h3>
                 <p className="text-sm text-gray-500">{selected.role || selected.member_type}</p>
                 <p className="text-xs"><StatusText userId={selected.id} /></p>
               </div>
