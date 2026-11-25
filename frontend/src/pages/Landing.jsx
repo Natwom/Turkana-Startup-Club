@@ -145,21 +145,26 @@ const steps = [
   ['Build & grow', 'Participate, earn certificates, grow your network and scale your startup.'],
 ]
 
+// Stories from the community.
+// The quotes below are draft wording. Have each person approve (or edit) their quote before publishing.
 const testimonials = [
   {
-    quote: 'TSC helped me find my co-founder at a hackathon. Our fintech startup now serves 2,000 customers.',
-    name: 'Akon E.',
-    role: 'Founder, PayLake',
+    quote:
+      'I started TSC so builders would have a place to find each other. Watching members form teams, ship real products and open doors for one another is what keeps us going.',
+    name: 'Daniel Natwom',
+    role: 'Founder, TSC',
   },
   {
-    quote: 'The mentorship program took my idea from a sketch to a funded pilot in six months.',
-    name: 'Faith N.',
-    role: 'Founder, HealthFirst',
+    quote:
+      'Through TSC I met the mentors and teammates who pushed ChatWave from a rough idea to a real product. The community keeps you building.',
+    name: 'Marion Moenga',
+    role: 'Founder, ChatWave',
   },
   {
-    quote: 'As a volunteer I grew my skills, built my network, and earned certifications that got me hired.',
-    name: 'Samuel L.',
-    role: 'Community Volunteer',
+    quote:
+      'TSC gave Grace Tech Solutions a network, honest feedback and visibility. Being around other founders keeps me motivated and accountable.',
+    name: 'Grace',
+    role: 'Founder, Grace Tech Solutions',
   },
 ]
 
