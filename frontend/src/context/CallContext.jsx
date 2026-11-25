@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../services/api'
+import { AUDIO_CONSTRAINTS, getCleanMic } from '../services/voiceInput'
 import { useRealtime } from './RealtimeContext'
 
 const CallContext = createContext(null)
@@ -17,6 +18,37 @@ const mediaErrorText = (err) => {
 }
 
 const stopStream = (s) => s?.getTracks().forEach((t) => t.stop())
+
+// Voice tuning for the Opus codec, written into the call setup (SDP):
+// silence suppression (DTX), error correction, mono, and a voice-sized bitrate.
+const tuneOpus = (sdp) => {
+  const m = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/i)
+  if (!m) return sdp
+  const pt = m[1]
+  const wanted = {
+    minptime: '10',
+    useinbandfec: '1',
+    usedtx: '1',
+    stereo: '0',
+    'sprop-stereo': '0',
+    maxaveragebitrate: '40000',
+    cbr: '0',
+  }
+  const re = new RegExp(`^a=fmtp:${pt} (.*)$`, 'm')
+  const found = sdp.match(re)
+  if (found) {
+    const params = new Map()
+    found[1].split(';').map((s) => s.trim()).filter(Boolean).forEach((p) => {
+      const [k, ...v] = p.split('=')
+      params.set(k, v.join('='))
+    })
+    Object.entries(wanted).forEach(([k, v]) => params.set(k, v))
+    const line = `a=fmtp:${pt} ${[...params].map(([k, v]) => (v === '' ? k : `${k}=${v}`)).join(';')}`
+    return sdp.replace(re, line)
+  }
+  const added = Object.entries(wanted).map(([k, v]) => `${k}=${v}`).join(';')
+  return sdp.replace(m[0], `${m[0]}\r\na=fmtp:${pt} ${added}`)
+}
 
 export function CallProvider({ children }) {
   const { send, subscribe, connected } = useRealtime()
@@ -37,6 +69,8 @@ export function CallProvider({ children }) {
   const gcRef = useRef(null)            // always-current copy of `groupCall`
   const pcRef = useRef(null)
   const localRef = useRef(null)
+  const voiceRef = useRef(null)         // the cleaned-up microphone (group calls)
+  const tipShown = useRef(false)
   const queuedCandidates = useRef([])
   const iceRef = useRef(null)
   const noticeTimer = useRef(null)
@@ -63,6 +97,8 @@ export function CallProvider({ children }) {
   }
 
   const releaseMedia = () => {
+    voiceRef.current?.close()
+    voiceRef.current = null
     stopStream(localRef.current)
     localRef.current = null
     setLocalStream(null)
@@ -106,7 +142,7 @@ export function CallProvider({ children }) {
       throw new Error('unsupported')
     }
     return navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: AUDIO_CONSTRAINTS,
       video: kind === 'video'
         ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
         : false,
@@ -355,10 +391,11 @@ export function CallProvider({ children }) {
     if (!pc) return
     try {
       const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
+      const sdp = tuneOpus(offer.sdp)
+      await pc.setLocalDescription({ type: offer.type, sdp })
       send({
         type: 'gcall_signal', group_id: g.groupId, to: userId,
-        data: { description: { type: offer.type, sdp: offer.sdp } },
+        data: { description: { type: offer.type, sdp } },
       })
     } catch {
       removeGroupPeer(userId)
@@ -394,10 +431,11 @@ export function CallProvider({ children }) {
       }
       if (data.description.type === 'offer') {
         const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
+        const sdp = tuneOpus(answer.sdp)
+        await pc.setLocalDescription({ type: answer.type, sdp })
         send({
           type: 'gcall_signal', group_id: g.groupId, to: from,
-          data: { description: { type: answer.type, sdp: answer.sdp } },
+          data: { description: { type: answer.type, sdp } },
         })
       }
     } else if (data.candidate) {
@@ -418,9 +456,13 @@ export function CallProvider({ children }) {
       startedAt: null, participants: {},
     })
     try {
-      const stream = await captureMedia('audio')
-      if (gcRef.current?.groupId !== groupId) { stopStream(stream); return } // cancelled meanwhile
-      adoptStream(stream)
+      if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
+        throw new Error('unsupported')
+      }
+      const mic = await getCleanMic() // echo cancellation + noise suppression + noise gate
+      if (gcRef.current?.groupId !== groupId) { mic.close(); return } // cancelled meanwhile
+      voiceRef.current = mic
+      adoptStream(mic.stream)
     } catch (err) {
       cleanupGroup()
       flash(mediaErrorText(err))
@@ -567,6 +609,10 @@ export function CallProvider({ children }) {
           }
         })
         setGroup({ ...g, status: 'active', startedAt: Date.now(), participants })
+        if (msg.participants.length > 0 && !tipShown.current) {
+          tipShown.current = true
+          flash('Tip: use headphones to avoid echo.')
+        }
         for (const p of msg.participants) await callGroupPeer(p.user_id)
         break
       }
@@ -648,6 +694,7 @@ export function CallProvider({ children }) {
     clearTimeout(noticeTimer.current)
     if (pcRef.current) pcRef.current.close()
     Object.values(gPeers.current).forEach((e) => e.pc.close())
+    voiceRef.current?.close()
     stopStream(localRef.current)
   }, [])
 
