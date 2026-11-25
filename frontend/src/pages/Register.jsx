@@ -45,7 +45,7 @@ const FLOW = ['Register', 'Verify', 'Login', 'Complete Profile', 'Enter the comm
 
 const TIPS = [
   ['Build', 'Join hackathons, build sessions, project teams and demo days.'],
-  ['Connect', 'Meet founders, mentors and collaborators across Turkana.'],
+  ['Connect', 'Meet founders, mentors and collaborators from around the world.'],
   ['Learn', 'Workshops and tech talks on AI, cybersecurity and pitching.'],
   ['Grow', 'Apply for mentorship, incubation, grants and accelerators.'],
 ]
@@ -122,7 +122,7 @@ export default function Register() {
   const { register } = useAuth()
   const nav = useNavigate()
   const [form, setForm] = useState({
-    full_name: '', email: '', phone: '', password: '', location: '', county: 'Turkana',
+    full_name: '', email: '', phone: '', password: '', location: '', county: '',
     institution: '', professional_role: '', member_type: 'Tech enthusiast',
     experience_level: 'Beginner', skills: [], bio: '', linkedin: '', github: '',
     portfolio: '', startup_info: '', interests: [],
@@ -265,7 +265,7 @@ export default function Register() {
         </Link>
 
         <div className="relative">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-xl font-bold">T</span>
+          <img src="/logo-light.svg" alt="TSC" className="h-12 w-auto" />
           <h2 className="mt-5 text-3xl font-extrabold leading-tight">
             Turn your idea<br />into a venture.
           </h2>
@@ -298,7 +298,7 @@ export default function Register() {
           </div>
         </div>
 
-        <p className="relative text-xs text-emerald-200">Free to join · Open to everyone · Made in Turkana</p>
+        <p className="relative text-xs text-emerald-200">Free to join · Open to everyone · Join from anywhere</p>
       </aside>
 
       {/* ── Form ── */}
@@ -307,11 +307,16 @@ export default function Register() {
           <Icon name="back" className="h-4 w-4" /> Back to home
         </Link>
 
+        {/* compact logo for phones and tablets */}
+        <div className="mx-auto mb-4 flex w-full max-w-2xl justify-center lg:hidden">
+          <img src="/logo.svg" alt="TSC" className="h-10 w-auto" />
+        </div>
+
         <form onSubmit={submit} className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 shadow-md sm:p-8">
           <div
             className={`tsc-anim transition-all duration-700 ease-out ${ready ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'}`}
           >
-            <h1 className="text-2xl font-bold text-emerald-700">Join Turkana Startup Club</h1>
+            <h1 className="text-2xl font-bold text-emerald-700">Join TSC</h1>
 
             {/* flow chips */}
             <ol className="mb-5 mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500">
@@ -418,10 +423,10 @@ export default function Register() {
             {/* 2 · About you */}
             <Section n={2} title="About you" ready={ready} delay={220}>
               <Field label="Location">
-                <input placeholder="Location" className={INPUT} value={form.location} onChange={set('location')} />
+                <input placeholder="City / town" className={INPUT} value={form.location} onChange={set('location')} />
               </Field>
-              <Field label="County">
-                <input placeholder="County" className={INPUT} value={form.county} onChange={set('county')} />
+              <Field label="County / State / Region">
+                <input placeholder="County / State / Region" className={INPUT} value={form.county} onChange={set('county')} />
               </Field>
               <Field label="Institution / Company">
                 <input placeholder="Institution / Company" className={INPUT} value={form.institution} onChange={set('institution')} />

@@ -164,9 +164,10 @@ const testimonials = [
 ]
 
 const faqs = [
-  ['Who can join the Turkana Startup Club?', 'Anyone! Students, developers, founders, mentors, investors and volunteers who want to grow the startup ecosystem in Turkana.'],
+  ['Who can join TSC?', 'Anyone, anywhere! Students, developers, founders, mentors, investors and volunteers who want to build, learn and grow with a global startup community.'],
   ['Is membership free?', 'Yes — becoming a member is completely free. Some specialized programs may have their own requirements.'],
   ['What happens at TSC events?', 'Hackathons, technical workshops, founder meetups, demo days and the annual conference — everything is designed to help you build, learn and connect.'],
+  ['Can I take part from outside my city or country?', 'Yes. Members join from many places, and online events, mentorship and the member directory are open to everyone, wherever you are.'],
   ['How do I get mentorship or funding?', 'Complete your profile, list your startup and apply to incubation programs. Our team will review and match you with mentors and opportunities.'],
 ]
 
@@ -175,16 +176,16 @@ const highlights = [
   ['Free to join', 'No fees, no catch', 'users'],
   ['Open to everyone', 'Students to founders', 'cap'],
   ['Build, learn, connect', 'Events, mentors, projects', 'bulb'],
-  ['Made in Turkana', 'For the county and beyond', 'globe'],
+  ['Open worldwide', 'Join from anywhere', 'globe'],
 ]
 
 // ── About / Mission / Vision / Values ──
 // Draft wording based on the rest of this page. Edit it to match the club's official statements.
 const ABOUT = {
   eyebrow: 'About us',
-  title: "Where Turkana's ideas become ventures",
+  title: 'Where great ideas become ventures',
   paragraphs: [
-    'Turkana Startup Club (TSC) is a community-driven platform that brings together students, developers, founders, mentors and volunteers across Turkana County to build, learn and grow together.',
+    'TSC is a community-driven platform that brings together students, developers, founders, mentors and volunteers from every background to build, learn and grow together.',
     'We run hackathons, workshops and founder meetups, and connect members with mentorship and incubation opportunities. This platform is where members meet, join events, earn verifiable certificates and find collaborators.',
   ],
   points: [
@@ -196,15 +197,15 @@ const ABOUT = {
 }
 
 const MISSION =
-  "To empower Turkana's students, developers and entrepreneurs with the community, skills, mentorship and opportunities they need to turn ideas into sustainable ventures."
+  'To empower students, developers and entrepreneurs with the community, skills, mentorship and opportunities they need to turn ideas into sustainable ventures.'
 
 const VISION =
-  'A thriving and inclusive startup ecosystem in Turkana County, where local innovators build solutions that create jobs and lasting impact, in Kenya and beyond.'
+  'A thriving and inclusive startup ecosystem everywhere, where local innovators build solutions that create jobs and lasting impact in their communities and beyond.'
 
 // [title, description, icon]
 const VALUES = [
   ['Collaboration', 'We build faster and go further when we work together.', 'users'],
-  ['Innovation', 'We back bold ideas and practical solutions to local problems.', 'bulb'],
+  ['Innovation', 'We back bold ideas and practical solutions to real problems.', 'bulb'],
   ['Inclusion', 'Everyone with the drive to build is welcome, whatever their background.', 'heart'],
   ['Integrity', 'We act honestly, share credit and keep our promises.', 'shield'],
 ]
@@ -722,9 +723,8 @@ export default function Landing() {
       {/* ── Header (sticky, blurs on scroll) ── */}
       <header className={`sticky top-0 z-50 transition-all ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm' : 'bg-white'}`}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2" onClick={() => setMenuOpen(false)}>
-            <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center">T</span>
-            <span className="font-bold text-xl text-emerald-700">Turkana Startup Club</span>
+          <Link to="/" className="flex items-center" aria-label="TSC home" onClick={() => setMenuOpen(false)}>
+            <img src="/logo.svg" alt="TSC" className="h-9 w-auto" />
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
@@ -813,10 +813,10 @@ export default function Landing() {
               {!reduced && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />}
               <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-300" />
             </span>
-            Empowering Turkana's builders, founders & dreamers
+            Empowering builders, founders &amp; dreamers everywhere
           </span>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
-            The digital home of Turkana's<br className="hidden md:block" /> startup ecosystem
+            The digital home of the<br className="hidden md:block" /> startup community
           </h1>
 
           {/* typewriter line */}
@@ -906,7 +906,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 py-20">
           <Reveal reduced={reduced} className="text-center mb-12">
             <h2 className="text-3xl font-bold">Our Mission &amp; Vision</h2>
-            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Why Turkana Startup Club exists, and where we are headed.</p>
+            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Why TSC exists, and where we are headed.</p>
           </Reveal>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -978,7 +978,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 py-20">
           <Reveal reduced={reduced} className="text-center mb-12">
             <h2 className="text-3xl font-bold">One Platform, Everything You Need</h2>
-            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Join and instantly access the tools that power Turkana's startup community.</p>
+            <p className="mt-3 text-gray-500 max-w-xl mx-auto">Join and instantly access the tools that power the TSC startup community.</p>
           </Reveal>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f, i) => (
@@ -1082,7 +1082,7 @@ export default function Landing() {
           <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl text-center text-white px-6 py-16 shadow-xl">
             <div className="tsc-float absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
             <div className="tsc-float absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-teal-300/20 blur-2xl" style={{ animationDelay: '-4s' }} aria-hidden="true" />
-            <h2 className="relative text-3xl font-bold">Ready to build the future of Turkana?</h2>
+            <h2 className="relative text-3xl font-bold">Ready to build what's next?</h2>
             <p className="relative mt-4 text-emerald-100">Join the community that is building, learning and growing together.</p>
             <div className="relative mt-8 flex flex-col sm:flex-row justify-center gap-3">
               <Link to="/register" className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow hover:shadow-lg hover:-translate-y-0.5 transition-all">
@@ -1100,11 +1100,8 @@ export default function Landing() {
       <footer className="bg-gray-900 text-gray-400">
         <div className="max-w-6xl mx-auto px-4 py-12 grid md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center">T</span>
-              <span className="font-bold text-lg text-white">Turkana Startup Club</span>
-            </div>
-            <p className="mt-3 text-sm max-w-sm">Empowering entrepreneurs, developers and changemakers across Turkana County and beyond.</p>
+            <img src="/logo-light.svg" alt="TSC" className="h-9 w-auto" />
+            <p className="mt-3 text-sm max-w-sm">Empowering entrepreneurs, developers and changemakers around the world.</p>
           </div>
           <div>
             <h4 className="text-white font-semibold mb-3">Quick Links</h4>
@@ -1130,7 +1127,7 @@ export default function Landing() {
         </div>
         <div className="border-t border-gray-800">
           <p className="max-w-6xl mx-auto px-4 py-4 text-xs text-gray-500">
-            © {new Date().getFullYear()} Turkana Startup Club. All rights reserved.
+            © {new Date().getFullYear()} TSC. All rights reserved.
           </p>
         </div>
       </footer>

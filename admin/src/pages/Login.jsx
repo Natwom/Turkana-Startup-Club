@@ -85,21 +85,6 @@ function Spinner() {
   )
 }
 
-function LogoMark({ className = 'h-9 w-9' }) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} role="img" aria-label="Turkana Startup Club">
-      <rect width="64" height="64" rx="15" fill="#059669" />
-      <circle cx="50.5" cy="12.5" r="4" fill="#FBBF24" />
-      <path d="M10 25.5C14 19.5 22.5 17 32 17S50 19.5 54 25.5C47 23.2 40 22.4 32 22.4S17 23.2 10 25.5Z" fill="#FFFFFF" />
-      <path d="M17 18.2C21 14.4 26 13 32 13S43 14.4 47 18.2C42 16.6 37.5 16 32 16S22 16.6 17 18.2Z" fill="#D1FAE5" />
-      <path d="M30.4 22.6H33.6L34 36C34.2 42 35 47 36.4 52H27.6C29 47 29.8 42 30 36Z" fill="#FFFFFF" />
-      <path d="M31.2 33.5L22.5 25.2L24.3 23.7L32 30Z" fill="#FFFFFF" />
-      <path d="M32.8 33.5L41.5 25.2L39.7 23.7L32 30Z" fill="#FFFFFF" />
-      <rect x="17" y="52" width="30" height="3" rx="1.5" fill="#A7F3D0" />
-    </svg>
-  )
-}
-
 /* ------------------------------------------------------------------ animations */
 const STYLES = `
 @keyframes tsc-fade { from { opacity: 0 } to { opacity: 1 } }
@@ -163,12 +148,10 @@ function BrandPanel() {
     <aside className="relative hidden overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white lg:flex lg:w-[46%] lg:flex-col lg:justify-between lg:p-12">
       <div className="pointer-events-none absolute inset-0 opacity-10"
         style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
-      <div className="relative flex items-center gap-3">
-        <LogoMark className="h-10 w-10" />
-        <div className="leading-tight">
-          <p className="font-semibold">Turkana Startup Club</p>
-          <p className="text-sm text-emerald-300">Admin Control Center</p>
-        </div>
+      <div className="relative flex items-center gap-4">
+        <img src="/logo-light.svg" alt="TSC" className="h-11 w-auto" />
+        <span className="h-6 w-px bg-white/20" aria-hidden="true" />
+        <p className="text-sm font-medium text-emerald-300">Admin Control Center</p>
       </div>
 
       <div className="relative max-w-md">
@@ -252,12 +235,9 @@ export default function Login() {
       <main className="flex flex-1 items-center justify-center bg-slate-50 px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
           {/* compact logo for phones and tablets */}
-          <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
-            <LogoMark className="h-10 w-10" />
-            <div className="leading-tight">
-              <p className="font-semibold text-slate-900">Turkana Startup Club</p>
-              <p className="text-sm text-emerald-700">Admin Control Center</p>
-            </div>
+          <div className="mb-8 flex flex-col items-center gap-1.5 lg:hidden">
+            <img src="/logo.svg" alt="TSC" className="h-11 w-auto" />
+            <p className="text-sm text-emerald-700">Admin Control Center</p>
           </div>
 
           <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">

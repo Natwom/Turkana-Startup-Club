@@ -166,7 +166,7 @@ function SuccessModal({ name, onContinue }) {
 /* ------------------------------------------------------------------ brand panel */
 const HIGHLIGHTS = [
   [CalendarIcon, 'Events and hackathons', 'Register for every build session, workshop and demo day.'],
-  [UsersIcon, 'Mentors and founders', 'Find co-founders, collaborators and mentors across Turkana.'],
+  [UsersIcon, 'Mentors and founders', 'Find co-founders, collaborators and mentors from anywhere.'],
   [AwardIcon, 'Verified certificates', 'Earn certificates you can share with employers and funders.'],
 ]
 
@@ -180,9 +180,8 @@ function BrandPanel() {
           backgroundSize: '28px 28px',
         }}
       />
-      <Link to="/" className="relative flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-lg font-bold">T</span>
-        <span className="text-lg font-semibold">Turkana Startup Club</span>
+      <Link to="/" className="relative flex w-fit items-center" aria-label="TSC home">
+        <img src="/logo-light.svg" alt="TSC" className="h-10 w-auto" />
       </Link>
 
       <div className="relative max-w-md">
@@ -208,7 +207,7 @@ function BrandPanel() {
       </div>
 
       <p className="relative text-sm text-emerald-200">
-        Building Turkana's startup ecosystem together.
+        Building the startup ecosystem together.
       </p>
     </aside>
   )
@@ -269,9 +268,8 @@ export default function Login() {
       <main className="flex flex-1 items-center justify-center bg-gray-50 px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
           {/* compact logo for phones and tablets */}
-          <Link to="/" className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-lg font-bold text-white">T</span>
-            <span className="text-lg font-semibold text-emerald-800">Turkana Startup Club</span>
+          <Link to="/" className="mb-8 flex items-center justify-center lg:hidden" aria-label="TSC home">
+            <img src="/logo.svg" alt="TSC" className="h-11 w-auto" />
           </Link>
 
           <form

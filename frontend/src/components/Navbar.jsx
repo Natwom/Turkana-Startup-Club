@@ -27,8 +27,8 @@ export default function Navbar() {
   return (
     <header className="bg-white border-b sticky top-0 z-30">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to={user ? '/dashboard' : '/'} className="font-bold text-emerald-700 tracking-wide">
-          TSC
+        <Link to={user ? '/dashboard' : '/'} className="flex items-center" aria-label="TSC home">
+          <img src="/logo.svg" alt="TSC" className="h-8 w-auto" />
         </Link>
 
         {/* desktop */}

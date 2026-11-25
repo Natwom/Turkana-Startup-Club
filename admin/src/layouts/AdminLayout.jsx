@@ -91,8 +91,11 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-slate-100 flex">
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
-        <div className="h-14 flex items-center px-4 font-bold text-white border-b border-slate-700 tracking-wide">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2" /> TSC ADMIN
+        <div className="h-14 flex items-center gap-2.5 px-4 border-b border-slate-700">
+          <img src="/logo-light.svg" alt="TSC" className="h-8 w-auto" />
+          <span className="rounded-md bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+            Admin
+          </span>
         </div>
 
         <div className="px-3 pt-3">
