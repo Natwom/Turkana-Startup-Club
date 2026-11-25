@@ -21,23 +21,39 @@ const stopStream = (s) => s?.getTracks().forEach((t) => t.stop())
 export function CallProvider({ children }) {
   const { send, subscribe, connected } = useRealtime()
 
+  /* ---------------------------------------------------------------- 1:1 call state */
   const [call, setCall] = useState(null)
   const [notice, setNotice] = useState('')
   const [localStream, setLocalStream] = useState(null)
   const [remoteStream, setRemoteStream] = useState(null)
 
+  /* ---------------------------------------------------------------- group call state */
+  const [groupCall, setGroupCall] = useState(null)           // the call I am in (or joining)
+  const [peerStreams, setPeerStreams] = useState({})         // userId -> MediaStream
+  const [activeGroupCalls, setActiveGroupCalls] = useState({}) // groupId -> { groupName, count }
+  const [groupInvite, setGroupInvite] = useState(null)       // pop-up: someone started a call
+
   const callRef = useRef(null)          // always-current copy of `call` for event handlers
+  const gcRef = useRef(null)            // always-current copy of `groupCall`
   const pcRef = useRef(null)
   const localRef = useRef(null)
   const queuedCandidates = useRef([])
   const iceRef = useRef(null)
   const noticeTimer = useRef(null)
   const signalChain = useRef(Promise.resolve())
+  const gPeers = useRef({})             // userId -> { pc, queued: [] }
+  const gEarly = useRef({})             // candidates that arrived before their offer
+  const gSignalChain = useRef(Promise.resolve())
   const live = useRef({})               // latest versions of the functions below
 
   const setCurrent = (next) => {
     callRef.current = next
     setCall(next)
+  }
+
+  const setGroup = (next) => {
+    gcRef.current = next
+    setGroupCall(next)
   }
 
   const flash = (message) => {
@@ -61,7 +77,7 @@ export function CallProvider({ children }) {
       pc.onconnectionstatechange = null
       pc.close()
     }
-    releaseMedia()
+    if (!gcRef.current) releaseMedia() // never cut the microphone of a group call
     queuedCandidates.current = []
     setRemoteStream(null)
     setCurrent(null)
@@ -138,9 +154,10 @@ export function CallProvider({ children }) {
     return pc
   }
 
-  /* ---------------------------------------------------------------- actions */
+  /* ---------------------------------------------------------------- 1:1 actions */
   const startCall = async (peer, kind) => {
     if (callRef.current) { flash('You are already in a call.'); return }
+    if (gcRef.current) { flash('Leave the group call first.'); return }
     if (!connected) { flash('You are offline. Reconnecting…'); return }
 
     setCurrent({
@@ -207,7 +224,7 @@ export function CallProvider({ children }) {
     setCurrent({ ...c, camOff })
   }
 
-  /* ---------------------------------------------------------------- signaling */
+  /* ---------------------------------------------------------------- 1:1 signaling */
   const startOffer = async (callId) => {
     try {
       const pc = await createPeer(callId, localRef.current)
@@ -246,10 +263,207 @@ export function CallProvider({ children }) {
     }
   }
 
+  /* ---------------------------------------------------------------- group call: peers */
+  const patchParticipant = (userId, patch) => {
+    const g = gcRef.current
+    if (!g) return
+    setGroup({
+      ...g,
+      participants: {
+        ...g.participants,
+        [userId]: { ...(g.participants[userId] || {}), ...patch },
+      },
+    })
+  }
+
+  const dropParticipant = (userId) => {
+    const g = gcRef.current
+    if (!g) return
+    const next = { ...g.participants }
+    delete next[userId]
+    setGroup({ ...g, participants: next })
+  }
+
+  const removeGroupPeer = (userId) => {
+    const entry = gPeers.current[userId]
+    delete gPeers.current[userId]
+    delete gEarly.current[userId]
+    if (entry) {
+      entry.pc.onicecandidate = null
+      entry.pc.ontrack = null
+      entry.pc.onconnectionstatechange = null
+      entry.pc.close()
+    }
+    setPeerStreams((s) => {
+      if (!(userId in s)) return s
+      const next = { ...s }
+      delete next[userId]
+      return next
+    })
+  }
+
+  const cleanupGroup = () => {
+    Object.keys(gPeers.current).forEach((id) => removeGroupPeer(id))
+    gPeers.current = {}
+    gEarly.current = {}
+    setPeerStreams({})
+    if (!callRef.current) releaseMedia()
+    setGroup(null)
+  }
+
+  const createGroupPeer = async (userId) => {
+    const g = gcRef.current
+    if (!g) return null
+    if (gPeers.current[userId]) return gPeers.current[userId].pc
+
+    const iceServers = await loadIce()
+    // the call may have ended, or the peer been created, while we waited for the ICE list
+    if (!gcRef.current || gcRef.current.groupId !== g.groupId) return null
+    if (gPeers.current[userId]) return gPeers.current[userId].pc
+
+    const pc = new RTCPeerConnection({ iceServers })
+    gPeers.current[userId] = { pc, queued: [] }
+    const local = localRef.current
+    if (local) local.getTracks().forEach((t) => pc.addTrack(t, local))
+
+    pc.ontrack = (e) => {
+      const stream = e.streams[0] || new MediaStream([e.track])
+      setPeerStreams((s) => ({ ...s, [userId]: stream }))
+    }
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        send({
+          type: 'gcall_signal', group_id: g.groupId, to: userId,
+          data: { candidate: e.candidate.toJSON() },
+        })
+      }
+    }
+
+    pc.onconnectionstatechange = () => {
+      if (gPeers.current[userId]?.pc !== pc) return
+      patchParticipant(userId, { conn: pc.connectionState })
+    }
+    return pc
+  }
+
+  // I just joined: send an offer to someone who was already in the call.
+  const callGroupPeer = async (userId) => {
+    const g = gcRef.current
+    if (!g) return
+    const pc = await createGroupPeer(userId)
+    if (!pc) return
+    try {
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      send({
+        type: 'gcall_signal', group_id: g.groupId, to: userId,
+        data: { description: { type: offer.type, sdp: offer.sdp } },
+      })
+    } catch {
+      removeGroupPeer(userId)
+    }
+  }
+
+  const handleGroupSignal = async (from, data) => {
+    const g = gcRef.current
+    if (!g) return
+
+    let entry = gPeers.current[from]
+    if (!entry) {
+      // a connection is only created when an offer arrives; hold early candidates until then
+      if (data.description?.type !== 'offer') {
+        if (data.candidate) {
+          if (!gEarly.current[from]) gEarly.current[from] = []
+          gEarly.current[from].push(data.candidate)
+        }
+        return
+      }
+      await createGroupPeer(from)
+      entry = gPeers.current[from]
+      if (!entry) return
+      entry.queued = gEarly.current[from] || []
+      delete gEarly.current[from]
+    }
+
+    const { pc } = entry
+    if (data.description) {
+      await pc.setRemoteDescription(data.description)
+      for (const cand of entry.queued.splice(0)) {
+        await pc.addIceCandidate(cand).catch(() => {})
+      }
+      if (data.description.type === 'offer') {
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        send({
+          type: 'gcall_signal', group_id: g.groupId, to: from,
+          data: { description: { type: answer.type, sdp: answer.sdp } },
+        })
+      }
+    } else if (data.candidate) {
+      if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {})
+      else entry.queued.push(data.candidate)
+    }
+  }
+
+  /* ---------------------------------------------------------------- group call: actions */
+  const joinGroupCall = async (groupId, groupName) => {
+    if (gcRef.current) { flash('You are already in a group call.'); return }
+    if (callRef.current) { flash('Finish your current call first.'); return }
+    if (!connected) { flash('You are offline. Reconnecting…'); return }
+
+    setGroupInvite(null)
+    setGroup({
+      groupId, groupName, status: 'joining', muted: false, handRaised: false,
+      startedAt: null, participants: {},
+    })
+    try {
+      const stream = await captureMedia('audio')
+      if (gcRef.current?.groupId !== groupId) { stopStream(stream); return } // cancelled meanwhile
+      adoptStream(stream)
+    } catch (err) {
+      cleanupGroup()
+      flash(mediaErrorText(err))
+      return
+    }
+    if (!send({ type: 'gcall_join', group_id: groupId })) {
+      cleanupGroup()
+      flash('Could not reach the server. Please try again.')
+    }
+  }
+
+  const leaveGroupCall = () => {
+    const g = gcRef.current
+    if (!g) return
+    send({ type: 'gcall_leave', group_id: g.groupId })
+    cleanupGroup()
+  }
+
+  const toggleGroupMute = () => {
+    const g = gcRef.current
+    if (!g || !localRef.current) return
+    const muted = !g.muted
+    localRef.current.getAudioTracks().forEach((t) => { t.enabled = !muted })
+    setGroup({ ...g, muted })
+    send({ type: 'gcall_mute', group_id: g.groupId, muted })
+  }
+
+  const toggleGroupHand = () => {
+    const g = gcRef.current
+    if (!g) return
+    const handRaised = !g.handRaised
+    setGroup({ ...g, handRaised })
+    send({ type: 'gcall_hand', group_id: g.groupId, raised: handRaised })
+  }
+
+  const dismissGroupInvite = () => setGroupInvite(null)
+
+  /* ---------------------------------------------------------------- incoming messages */
   const onMessage = async (msg) => {
     const c = callRef.current
 
     switch (msg.type) {
+      /* ---------- 1:1 calls ---------- */
       case 'call_ringing':
         if (c && c.direction === 'out' && !c.id) setCurrent({ ...c, id: msg.call_id, status: 'ringing' })
         break
@@ -268,7 +482,7 @@ export function CallProvider({ children }) {
       }
 
       case 'call_incoming':
-        if (c) { send({ type: 'call_decline', call_id: msg.call_id }); break }
+        if (c || gcRef.current) { send({ type: 'call_decline', call_id: msg.call_id }); break }
         setCurrent({
           id: msg.call_id, peerId: msg.from, peerName: msg.from_name, kind: msg.kind,
           direction: 'in', status: 'ringing', muted: false, camOff: false, startedAt: null,
@@ -311,8 +525,90 @@ export function CallProvider({ children }) {
         if (c && c.id === msg.call_id && c.status === 'ringing') cleanup()
         break
 
+      /* ---------- group calls ---------- */
+      case 'gcall_status': {
+        setActiveGroupCalls((prev) => {
+          const next = { ...prev }
+          if (msg.active) next[msg.group_id] = { groupName: msg.group_name, count: msg.count }
+          else delete next[msg.group_id]
+          return next
+        })
+        if (msg.active && msg.new && !gcRef.current && !callRef.current) {
+          setGroupInvite({ groupId: msg.group_id, groupName: msg.group_name, by: msg.started_by })
+        }
+        if (!msg.active) {
+          setGroupInvite((inv) => (inv?.groupId === msg.group_id ? null : inv))
+        }
+        break
+      }
+
+      case 'gcall_error': {
+        const reasons = {
+          not_allowed: 'You are not a member of this group.',
+          busy_self: 'You are already in a call.',
+          full: 'This voice call is full (6 people maximum).',
+        }
+        if (gcRef.current?.groupId === msg.group_id) cleanupGroup()
+        flash(reasons[msg.reason] || 'Could not join the voice call.')
+        break
+      }
+
+      case 'gcall_joined': {
+        const g = gcRef.current
+        if (!g || g.groupId !== msg.group_id) {
+          // I cancelled while joining: make sure the server lets me go
+          send({ type: 'gcall_leave', group_id: msg.group_id })
+          break
+        }
+        const participants = {}
+        msg.participants.forEach((p) => {
+          participants[p.user_id] = {
+            name: p.name, muted: p.muted, hand: p.hand, hand_at: p.hand_at, conn: 'new',
+          }
+        })
+        setGroup({ ...g, status: 'active', startedAt: Date.now(), participants })
+        for (const p of msg.participants) await callGroupPeer(p.user_id)
+        break
+      }
+
+      case 'gcall_peer_joined': {
+        const g = gcRef.current
+        if (!g || g.groupId !== msg.group_id) break
+        const u = msg.user
+        removeGroupPeer(u.user_id) // drop any stale connection from an earlier visit
+        patchParticipant(u.user_id, {
+          name: u.name, muted: u.muted, hand: u.hand, hand_at: u.hand_at, conn: 'new',
+        })
+        break
+      }
+
+      case 'gcall_peer_left':
+        if (gcRef.current?.groupId === msg.group_id) {
+          removeGroupPeer(msg.user_id)
+          dropParticipant(msg.user_id)
+        }
+        break
+
+      case 'gcall_peer_state':
+        if (gcRef.current?.groupId === msg.group_id) {
+          patchParticipant(msg.user.user_id, {
+            muted: msg.user.muted, hand: msg.user.hand, hand_at: msg.user.hand_at,
+          })
+        }
+        break
+
+      case 'gcall_signal':
+        if (gcRef.current?.groupId === msg.group_id) {
+          // handle one at a time, in order
+          gSignalChain.current = gSignalChain.current
+            .then(() => handleGroupSignal(msg.from, msg.data || {}))
+            .catch(() => {})
+        }
+        break
+
       case 'socket_closed':
         if (c) { cleanup(); flash('Connection lost. The call ended.') }
+        if (gcRef.current) { cleanupGroup(); flash('Connection lost. You left the voice call.') }
         break
 
       default:
@@ -321,13 +617,37 @@ export function CallProvider({ children }) {
   }
 
   // keep the latest closures reachable from stable callbacks
-  live.current = { onMessage, startCall, acceptCall, endCall, toggleMute, toggleCamera }
+  live.current = {
+    onMessage, startCall, acceptCall, endCall, toggleMute, toggleCamera,
+    joinGroupCall, leaveGroupCall, toggleGroupMute, toggleGroupHand,
+  }
 
   useEffect(() => subscribe((msg) => { live.current.onMessage(msg) }), [subscribe])
+
+  // which groups have a live call right now (for the "Join" banner)
+  useEffect(() => {
+    if (!connected) {
+      setActiveGroupCalls({})
+      return undefined
+    }
+    let cancelled = false
+    api.get('/group-calls/active')
+      .then((r) => {
+        if (cancelled) return
+        const map = {}
+        ;(Array.isArray(r.data) ? r.data : []).forEach((g) => {
+          map[g.group_id] = { groupName: g.group_name, count: g.count }
+        })
+        setActiveGroupCalls(map)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [connected])
 
   useEffect(() => () => {
     clearTimeout(noticeTimer.current)
     if (pcRef.current) pcRef.current.close()
+    Object.values(gPeers.current).forEach((e) => e.pc.close())
     stopStream(localRef.current)
   }, [])
 
@@ -339,7 +659,14 @@ export function CallProvider({ children }) {
     endCall: () => live.current.endCall(),
     toggleMute: () => live.current.toggleMute(),
     toggleCamera: () => live.current.toggleCamera(),
-  }), [call, notice, localStream, remoteStream])
+    // group voice calls
+    groupCall, peerStreams, activeGroupCalls, groupInvite,
+    joinGroupCall: (...a) => live.current.joinGroupCall(...a),
+    leaveGroupCall: () => live.current.leaveGroupCall(),
+    toggleGroupMute: () => live.current.toggleGroupMute(),
+    toggleGroupHand: () => live.current.toggleGroupHand(),
+    dismissGroupInvite,
+  }), [call, notice, localStream, remoteStream, groupCall, peerStreams, activeGroupCalls, groupInvite])
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>
 }

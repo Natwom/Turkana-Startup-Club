@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -10,10 +10,24 @@ from app.db.session import get_db
 from app.models import Connection, User
 from app.models.groups import ChatGroup, ChatGroupMember, ChatGroupMessage
 from app.services.notifications import notify
+from app.services.storage import AUDIO_MAX_SIZE, get_storage
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 MAX_MEMBERS = 100
+MAX_VOICE_SECONDS = 300  # 5 minutes
+
+# content-type sent by the browser's MediaRecorder -> file extension we store
+VOICE_TYPES = {
+    "audio/webm": ".webm",
+    "audio/ogg": ".ogg",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "audio/aac": ".aac",
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+}
 
 
 # ---------------------------------------------------------------- schemas
@@ -61,6 +75,29 @@ class MessageIn(BaseModel):
 # ---------------------------------------------------------------- helpers
 def _iso(dt: datetime) -> str:
     return dt.isoformat() + "Z"  # stored as naive UTC
+
+
+def _mmss(seconds: int) -> str:
+    seconds = max(0, int(seconds or 0))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def _looks_like_audio(data: bytes, ext: str) -> bool:
+    """Cheap magic-byte check so a renamed file cannot be uploaded as a voice note."""
+    head = data[:16]
+    if ext == ".webm":
+        return head[:4] == b"\x1a\x45\xdf\xa3"
+    if ext == ".ogg":
+        return head[:4] == b"OggS"
+    if ext == ".m4a":
+        return head[4:8] == b"ftyp"
+    if ext == ".wav":
+        return head[:4] == b"RIFF" and head[8:12] == b"WAVE"
+    if ext == ".mp3":
+        return head[:3] == b"ID3" or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0)
+    if ext == ".aac":
+        return len(head) > 1 and head[0] == 0xFF and (head[1] & 0xF0) == 0xF0
+    return False
 
 
 def _connected_ids(db: Session, me_id: str) -> set[str]:
@@ -117,9 +154,18 @@ def _msg(m: ChatGroupMessage) -> dict:
         "sender_id": m.sender_id,
         "sender_name": m.sender.full_name if m.sender else "Former member",
         "sender_badge": bool(m.sender and m.sender.is_badge_verified),
-        "content": m.content,
+        "kind": m.kind or "text",
+        "content": m.content or "",
+        "audio_url": m.audio_url or "",
+        "audio_duration": m.audio_duration or 0,
         "created_at": _iso(m.created_at),
     }
+
+
+def _preview(m: ChatGroupMessage) -> str:
+    if (m.kind or "text") == "voice":
+        return f"🎤 Voice message ({_mmss(m.audio_duration)})"
+    return m.content or ""
 
 
 def _summary(db: Session, g: ChatGroup, mem: ChatGroupMember) -> dict:
@@ -133,12 +179,34 @@ def _summary(db: Session, g: ChatGroup, mem: ChatGroupMember) -> dict:
         "member_count": len(g.members),
         "my_role": mem.role,
         "created_at": _iso(g.created_at),
-        "last_message": last.content if last else "",
+        "last_message": _preview(last) if last else "",
         "last_sender": (last.sender.full_name if last.sender else "Former member") if last else "",
         "last_message_at": _iso(last.created_at) if last else None,
         "last_from_me": bool(last and last.sender_id == mem.user_id),
         "unread": _unread(db, mem),
     }
+
+
+def _store_message(db: Session, group_id: str, mem: ChatGroupMember, user: User,
+                   notice: str, **fields) -> ChatGroupMessage:
+    """Save a message (text or voice) and notify members who have nothing unread yet."""
+    g = db.get(ChatGroup, group_id)
+
+    # Only notify members who have nothing unread yet, so a busy chat does not spam them.
+    # Must be computed BEFORE the new message is stored.
+    to_notify = [m.user_id for m in g.members
+                 if m.user_id != user.id and _unread(db, m) == 0]
+
+    msg = ChatGroupMessage(group_id=group_id, sender_id=user.id, **fields)
+    db.add(msg)
+    mem.last_read_at = datetime.utcnow()
+    db.commit()
+    db.refresh(msg)
+
+    for uid_ in to_notify:
+        notify(db, uid_, f'{notice} "{g.name}"',
+               ntype="message", link=f"/messages/group/{group_id}")
+    return msg
 
 
 # ---------------------------------------------------------------- endpoints
@@ -239,22 +307,42 @@ def delete_group(group_id: str, db: Session = Depends(get_db),
 def send_message(group_id: str, data: MessageIn, db: Session = Depends(get_db),
                  user: User = Depends(get_current_user)):
     mem = _require_member(db, group_id, user.id)
-    g = db.get(ChatGroup, group_id)
+    msg = _store_message(db, group_id, mem, user, "New message in", content=data.content)
+    return _msg(msg)
 
-    # Only notify members who have nothing unread yet, so a busy chat does not spam them.
-    # Must be computed BEFORE the new message is stored.
-    to_notify = [m.user_id for m in g.members
-                 if m.user_id != user.id and _unread(db, m) == 0]
 
-    msg = ChatGroupMessage(group_id=group_id, sender_id=user.id, content=data.content)
-    db.add(msg)
-    mem.last_read_at = datetime.utcnow()
-    db.commit()
-    db.refresh(msg)
+@router.post("/{group_id}/voice")
+def send_voice(group_id: str,
+               file: UploadFile = File(...),
+               duration: int = Form(0),
+               db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
+    """Upload a recorded voice note to the group."""
+    mem = _require_member(db, group_id, user.id)
 
-    for uid_ in to_notify:
-        notify(db, uid_, f'New message in "{g.name}"',
-               ntype="message", link=f"/messages/group/{group_id}")
+    ctype = (file.content_type or "").split(";")[0].strip().lower()
+    ext = VOICE_TYPES.get(ctype)
+    if not ext:
+        raise HTTPException(400, "Unsupported audio format")
+
+    data = file.file.read(AUDIO_MAX_SIZE + 1)
+    if not data:
+        raise HTTPException(400, "The recording is empty")
+    if len(data) > AUDIO_MAX_SIZE:
+        raise HTTPException(413, "The voice message is too large")
+    if not _looks_like_audio(data, ext):
+        raise HTTPException(400, "That file is not a valid audio recording")
+    if duration > MAX_VOICE_SECONDS + 5:
+        raise HTTPException(400, "Voice messages can be at most 5 minutes long")
+    duration = max(1, min(duration, MAX_VOICE_SECONDS))
+
+    try:
+        url = get_storage().save(data, ext, kind="audio")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    msg = _store_message(db, group_id, mem, user, "New voice message in",
+                         content="", kind="voice", audio_url=url, audio_duration=duration)
     return _msg(msg)
 
 

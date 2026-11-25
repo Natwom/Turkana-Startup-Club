@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -46,7 +46,11 @@ class ChatGroupMessage(Base):
     group_id = Column(String, ForeignKey("chat_groups.id", ondelete="CASCADE"),
                       nullable=False, index=True)
     sender_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    content = Column(Text, nullable=False)
+    content = Column(Text, nullable=False, default="")
+    # "text" or "voice". Voice notes keep content empty and use audio_url / audio_duration.
+    kind = Column(String(10), nullable=False, default="text", server_default="text")
+    audio_url = Column(String(500), nullable=False, default="", server_default="")
+    audio_duration = Column(Integer, nullable=False, default=0, server_default="0")  # seconds
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     group = relationship("ChatGroup", back_populates="messages")

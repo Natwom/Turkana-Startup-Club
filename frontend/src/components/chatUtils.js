@@ -1,3 +1,6 @@
+// Same base URL logic as services/api.js
+const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+
 export const errorMessage = (err) => {
   const detail = err.response?.data?.detail
   if (typeof detail === 'string') return detail
@@ -26,3 +29,17 @@ export const dayLabel = (iso) => {
 
 export const initials = (name = '?') =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+
+// 75 -> "1:15"
+export const formatDuration = (sec = 0) => {
+  const s = Math.max(0, Math.round(sec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+// Uploaded files are stored as "/uploads/abc.webm". The backend also serves them under
+// /api/uploads, so this works with the Vite proxy in dev and with VITE_API_URL in production.
+export const fileUrl = (path) => {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_URL}${path.startsWith('/') ? '' : '/'}${path}`
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useCalls } from '../context/CallContext'
 import CallIcon from './CallIcon'
+import GroupCallOverlay from './GroupCallOverlay'
 
 const initials = (name = '?') =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -73,7 +74,14 @@ export default function CallOverlay() {
     </div>
   )
 
-  if (!call) return banner || null
+  if (!call) {
+    return (
+      <>
+        {banner}
+        <GroupCallOverlay />
+      </>
+    )
+  }
 
   const isVideo = call.kind === 'video'
   const incomingRinging = call.direction === 'in' && call.status === 'ringing'
@@ -91,6 +99,7 @@ export default function CallOverlay() {
   return (
     <>
       {banner}
+      <GroupCallOverlay />
       <div className="fixed inset-0 z-[60] bg-gray-900 text-white flex flex-col">
         {/* remote audio always plays here; remote video below is muted so sound isn't doubled */}
         <audio autoPlay ref={bindStream(remoteStream)} />
